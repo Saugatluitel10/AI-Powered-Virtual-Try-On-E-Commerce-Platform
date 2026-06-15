@@ -19,7 +19,7 @@ services:
   # ─── Main API: Node.js + Express + Prisma + Supabase ────────────────────────
   backend:
     build:
-      context: ./backend
+      context: ./apps/api
       dockerfile: Dockerfile
     container_name: vtryon_backend
     restart: unless-stopped
@@ -28,7 +28,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app
+      - ./apps/api:/app
       - /app/node_modules
     depends_on:
       redis:
@@ -38,7 +38,7 @@ services:
   # ─── AI Microservice: Python FastAPI (OOTDiffusion/IDM-VTON, MediaPipe, SAM 2, Claude) ──
   ai-service:
     build:
-      context: ./ai-service
+      context: ./apps/ai-service
       dockerfile: Dockerfile
     container_name: vtryon_ai
     restart: unless-stopped
@@ -47,13 +47,13 @@ services:
     ports:
       - "8001:8001"
     volumes:
-      - ./ai-service:/app
+      - ./apps/ai-service:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
 
   # ─── Frontend: Next.js 14 ───────────────────────────────────────────────────
   frontend:
     build:
-      context: ./frontend
+      context: ./apps/web
       dockerfile: Dockerfile
     container_name: vtryon_frontend
     restart: unless-stopped
@@ -62,7 +62,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./frontend:/app
+      - ./apps/web:/app
       - /app/node_modules
       - /app/.next
     depends_on:
