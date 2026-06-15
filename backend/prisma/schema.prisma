@@ -1,0 +1,291 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  customer
+  retailer_admin
+  super_admin
+}
+
+enum FitPreference {
+  slim
+  regular
+  relaxed
+}
+
+enum MeasurementsSource {
+  manual
+  ai_estimated
+  mediapipe
+}
+
+enum StorePlan {
+  free
+  starter
+  growth
+  enterprise
+}
+
+enum GarmentType {
+  top
+  bottom
+  dress
+  outerwear
+  accessory
+}
+
+enum GenderType {
+  mens
+  womens
+  unisex
+  kids
+}
+
+enum OrderStatus {
+  pending
+  confirmed
+  processing
+  shipped
+  delivered
+  cancelled
+  refunded
+}
+
+enum TryOnStatus {
+  queued
+  processing
+  completed
+  failed
+}
+
+enum RecommendationSessionType {
+  try_on_followup
+  proactive
+  user_requested
+}
+
+model User {
+  id             String    @id @default(uuid())
+  email          String    @unique
+  fullName       String?
+  phone          String?
+  role           UserRole  @default(customer)
+  isActive       Boolean   @default(true)
+  isVerified     Boolean   @default(false)
+  supabaseId     String?   @unique
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  bodyProfile        BodyProfile?
+  stores             Store[]
+  cartItems          CartItem[]
+  orders             Order[]
+  tryOnSessions      TryOnSession[]
+  recommendations    StyleRecommendation[]
+  wishlists          Wishlist[]
+}
+
+model BodyProfile {
+  id                 String              @id @default(uuid())
+  userId             String              @unique
+  heightCm           Float?
+  weightKg           Float?
+  chestCm            Float?
+  waistCm            Float?
+  hipsCm             Float?
+  shoulderWidthCm    Float?
+  inseamCm           Float?
+  skinTone           String?
+  fitPreference      FitPreference?
+  styleTags          String[]
+  profilePhotoUrl    String?
+  measurementsSource MeasurementsSource?
+  updatedAt          DateTime            @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Store {
+  id              String     @id @default(uuid())
+  ownerId         String
+  name            String
+  slug            String     @unique
+  logoUrl         String?
+  domain          String?
+  stripeAccountId String?
+  plan            StorePlan  @default(free)
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+
+  owner    User      @relation(fields: [ownerId], references: [id])
+  products Product[]
+  orders   Order[]
+}
+
+model Category {
+  id       String     @id @default(uuid())
+  storeId  String?
+  parentId String?
+  name     String
+  slug     String
+
+  parent   Category?  @relation("CategoryChildren", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryChildren")
+  products Product[]
+}
+
+model Product {
+  id              String       @id @default(uuid())
+  storeId         String
+  categoryId      String?
+  name            String
+  slug            String
+  description     String?
+  basePrice       Decimal      @db.Decimal(10, 2)
+  currency        String       @default("NPR")
+  gender          GenderType?
+  garmentType     GarmentType?
+  tags            String[]
+  isActive        Boolean      @default(true)
+  isTryonEnabled  Boolean      @default(false)
+  flatLayImageUrl String?
+  modelImageUrl   String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  store         Store            @relation(fields: [storeId], references: [id])
+  category      Category?        @relation(fields: [categoryId], references: [id])
+  variants      ProductVariant[]
+  images        ProductImage[]
+  tryOnSessions TryOnSession[]
+}
+
+model ProductVariant {
+  id            String   @id @default(uuid())
+  productId     String
+  size          String?
+  color         String?
+  colorHex      String?
+  sku           String?  @unique
+  stockQuantity Int      @default(0)
+  priceModifier Decimal  @default(0) @db.Decimal(10, 2)
+  imageUrl      String?
+
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+  wishlists  Wishlist[]
+}
+
+model ProductImage {
+  id        String  @id @default(uuid())
+  productId String
+  variantId String?
+  url       String
+  altText   String?
+  isPrimary Boolean @default(false)
+  sortOrder Int     @default(0)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model CartItem {
+  id        String   @id @default(uuid())
+  userId    String
+  variantId String
+  quantity  Int      @default(1)
+  addedAt   DateTime @default(now())
+
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  variant ProductVariant @relation(fields: [variantId], references: [id])
+
+  @@unique([userId, variantId])
+}
+
+model Order {
+  id                    String      @id @default(uuid())
+  userId                String
+  storeId               String
+  status                OrderStatus @default(pending)
+  subtotal              Decimal     @db.Decimal(10, 2)
+  shippingCost          Decimal     @default(0) @db.Decimal(10, 2)
+  taxAmount             Decimal     @default(0) @db.Decimal(10, 2)
+  totalAmount           Decimal     @db.Decimal(10, 2)
+  currency              String      @default("NPR")
+  stripePaymentIntentId String?     @unique
+  esewaRefId            String?
+  khaltiPidx            String?
+  paymentStatus         String?
+  shippingAddress       Json?
+  notes                 String?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  user  User        @relation(fields: [userId], references: [id])
+  store Store       @relation(fields: [storeId], references: [id])
+  items OrderItem[]
+}
+
+model OrderItem {
+  id             String   @id @default(uuid())
+  orderId        String
+  variantId      String
+  productName    String
+  variantDetails Json?
+  quantity       Int
+  unitPrice      Decimal  @db.Decimal(10, 2)
+  totalPrice     Decimal  @db.Decimal(10, 2)
+
+  order   Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variant ProductVariant @relation(fields: [variantId], references: [id])
+}
+
+model TryOnSession {
+  id                   String      @id @default(uuid())
+  userId               String?
+  productId            String
+  variantId            String?
+  userPhotoUrl         String
+  garmentImageUrl      String
+  resultImageUrl       String?
+  replicatePredictionId String?
+  status               TryOnStatus @default(queued)
+  processingTimeMs     Int?
+  bodyMeasurements     Json?
+  errorMessage         String?
+  createdAt            DateTime    @default(now())
+
+  user    User?   @relation(fields: [userId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model StyleRecommendation {
+  id                 String                    @id @default(uuid())
+  userId             String
+  sessionType        RecommendationSessionType @default(user_requested)
+  promptUsed         String?
+  claudeResponse     Json?
+  productIdsSuggested String[]
+  userRating         Int?
+  createdAt          DateTime                  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Wishlist {
+  id        String   @id @default(uuid())
+  userId    String
+  variantId String
+  addedAt   DateTime @default(now())
+
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  variant ProductVariant @relation(fields: [variantId], references: [id])
+
+  @@unique([userId, variantId])
+}
