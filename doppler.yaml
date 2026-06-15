@@ -1,0 +1,3 @@
+setup:
+  project: vtryon
+  config: dev

@@ -1,4 +1,6 @@
 import "dotenv/config";
+import { initSentry, Sentry } from "./lib/sentry";
+initSentry(); // Must be called before any other imports that use express
 import express from "express";
 import cors from "cors";
 import { json } from "express";
