@@ -3,15 +3,18 @@
 export type UserRole = "customer" | "retailer_admin" | "super_admin";
 export type FitPreference = "slim" | "regular" | "relaxed";
 export type MeasurementsSource = "manual" | "ai_estimated" | "mediapipe";
+export type BodyType = "hourglass" | "pear" | "apple" | "rectangle" | "inverted_triangle";
 
 export interface User {
   id: string;
   email: string;
-  fullName: string | null;
+  name: string | null;
+  avatarUrl: string | null;
   phone: string | null;
   role: UserRole;
   isActive: boolean;
   isVerified: boolean;
+  supabaseId: string | null;
   createdAt: string;
 }
 
@@ -20,17 +23,39 @@ export interface BodyProfile {
   userId: string;
   heightCm: number | null;
   weightKg: number | null;
-  chestCm: number | null;
+  bustCm: number | null;
   waistCm: number | null;
   hipsCm: number | null;
   shoulderWidthCm: number | null;
   inseamCm: number | null;
+  bodyType: BodyType | null;
   skinTone: string | null;
   fitPreference: FitPreference | null;
   styleTags: string[];
-  profilePhotoUrl: string | null;
+  photoUrl: string | null;
   measurementsSource: MeasurementsSource | null;
   updatedAt: string;
+}
+
+export interface StyleProfile {
+  id: string;
+  userId: string;
+  preferredStyles: string[];
+  occasions: string[];
+  colorPalette: string[];
+  updatedAt: string;
+}
+
+// ─── Brand ────────────────────────────────────────────────────────────────────
+
+export interface Brand {
+  id: string;
+  name: string;
+  slug: string;
+  logo: string | null;
+  commissionRate: number;
+  isVerified: boolean;
+  createdAt: string;
 }
 
 // ─── Product ──────────────────────────────────────────────────────────────────
@@ -62,22 +87,25 @@ export interface Product {
   name: string;
   slug: string;
   description: string | null;
-  basePrice: number;
+  price: number;
   currency: string;
+  sizes: string[];
   gender: GenderType | null;
   garmentType: GarmentType | null;
   tags: string[];
   isTryonEnabled: boolean;
   flatLayImageUrl: string | null;
   modelImageUrl: string | null;
+  brand: Brand | null;
   variants: ProductVariant[];
   images: ProductImage[];
   createdAt: string;
 }
 
 export interface ProductListItem
-  extends Pick<Product, "id" | "name" | "slug" | "basePrice" | "currency" | "gender" | "garmentType" | "isTryonEnabled"> {
+  extends Pick<Product, "id" | "name" | "slug" | "price" | "currency" | "sizes" | "gender" | "garmentType" | "isTryonEnabled"> {
   primaryImageUrl: string | null;
+  brandName: string | null;
 }
 
 export interface Category {
@@ -114,11 +142,11 @@ export interface Cart {
 
 export interface OrderItem {
   id: string;
-  variantId: string;
+  productId: string;
   productName: string;
-  variantDetails: Record<string, string> | null;
+  size: string | null;
   quantity: number;
-  unitPrice: number;
+  priceAtTime: number;
   totalPrice: number;
 }
 
@@ -130,7 +158,8 @@ export interface Order {
   taxAmount: number;
   totalAmount: number;
   currency: string;
-  stripePaymentIntentId: string | null;
+  paymentMethod: string | null;
+  paymentRef: string | null;
   shippingAddress: Record<string, string> | null;
   items: OrderItem[];
   createdAt: string;
@@ -141,18 +170,31 @@ export interface Order {
 
 export type TryOnStatus = "queued" | "processing" | "completed" | "failed";
 
-export interface TryOnSession {
+export interface TryOnResult {
   id: string;
   productId: string;
   userId: string | null;
   userPhotoUrl: string;
   garmentImageUrl: string;
   resultImageUrl: string | null;
+  sizeRecommended: string | null;
   status: TryOnStatus;
   processingTimeMs: number | null;
   bodyMeasurements: Partial<BodyProfile> | null;
   errorMessage: string | null;
   createdAt: string;
+}
+
+// ─── Wardrobe ─────────────────────────────────────────────────────────────────
+
+export interface WardrobeItem {
+  id: string;
+  userId: string;
+  productId: string;
+  tryOnResultId: string | null;
+  savedAt: string;
+  product?: ProductListItem;
+  tryOnResult?: Pick<TryOnResult, "id" | "resultImageUrl" | "sizeRecommended">;
 }
 
 // ─── Recommendations ──────────────────────────────────────────────────────────

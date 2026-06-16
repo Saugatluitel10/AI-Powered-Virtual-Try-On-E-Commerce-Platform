@@ -7,6 +7,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
 enum UserRole {
   customer
   retailer_admin
@@ -23,6 +25,14 @@ enum MeasurementsSource {
   manual
   ai_estimated
   mediapipe
+}
+
+enum BodyType {
+  hourglass
+  pear
+  apple
+  rectangle
+  inverted_triangle
 }
 
 enum StorePlan {
@@ -70,25 +80,30 @@ enum RecommendationSessionType {
   user_requested
 }
 
-model User {
-  id             String    @id @default(uuid())
-  email          String    @unique
-  fullName       String?
-  phone          String?
-  role           UserRole  @default(customer)
-  isActive       Boolean   @default(true)
-  isVerified     Boolean   @default(false)
-  supabaseId     String?   @unique
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+// ─── Core Models ──────────────────────────────────────────────────────────────
 
-  bodyProfile        BodyProfile?
-  stores             Store[]
-  cartItems          CartItem[]
-  orders             Order[]
-  tryOnSessions      TryOnSession[]
-  recommendations    StyleRecommendation[]
-  wishlists          Wishlist[]
+model User {
+  id          String    @id @default(uuid())
+  email       String    @unique
+  name        String?
+  avatarUrl   String?
+  phone       String?
+  role        UserRole  @default(customer)
+  isActive    Boolean   @default(true)
+  isVerified  Boolean   @default(false)
+  supabaseId  String?   @unique
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  bodyProfile      BodyProfile?
+  styleProfile     StyleProfile?
+  stores           Store[]
+  cartItems        CartItem[]
+  orders           Order[]
+  tryOnResults     TryOnResult[]
+  wardrobeItems    WardrobeItem[]
+  recommendations  StyleRecommendation[]
+  wishlists        Wishlist[]
 }
 
 model BodyProfile {
@@ -96,40 +111,68 @@ model BodyProfile {
   userId             String              @unique
   heightCm           Float?
   weightKg           Float?
-  chestCm            Float?
+  bustCm             Float?
   waistCm            Float?
   hipsCm             Float?
   shoulderWidthCm    Float?
   inseamCm           Float?
+  bodyType           BodyType?
   skinTone           String?
   fitPreference      FitPreference?
   styleTags          String[]
-  profilePhotoUrl    String?
+  photoUrl           String?
   measurementsSource MeasurementsSource?
   updatedAt          DateTime            @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+model StyleProfile {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  preferredStyles String[]
+  occasions       String[]
+  colorPalette    String[]
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── Brand & Store ────────────────────────────────────────────────────────────
+
+model Brand {
+  id             String   @id @default(uuid())
+  name           String
+  slug           String   @unique
+  logo           String?
+  commissionRate Decimal  @default(0.10) @db.Decimal(5, 4)
+  isVerified     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  products Product[]
+}
+
 model Store {
-  id              String     @id @default(uuid())
+  id              String    @id @default(uuid())
   ownerId         String
   name            String
-  slug            String     @unique
+  slug            String    @unique
   logoUrl         String?
   domain          String?
   stripeAccountId String?
-  plan            StorePlan  @default(free)
-  isActive        Boolean    @default(true)
-  createdAt       DateTime   @default(now())
+  plan            StorePlan @default(free)
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
 
   owner    User      @relation(fields: [ownerId], references: [id])
   products Product[]
   orders   Order[]
 }
 
+// ─── Catalog ──────────────────────────────────────────────────────────────────
+
 model Category {
-  id       String     @id @default(uuid())
+  id       String    @id @default(uuid())
   storeId  String?
   parentId String?
   name     String
@@ -143,12 +186,14 @@ model Category {
 model Product {
   id              String       @id @default(uuid())
   storeId         String
+  brandId         String?
   categoryId      String?
   name            String
   slug            String
   description     String?
-  basePrice       Decimal      @db.Decimal(10, 2)
+  price           Decimal      @db.Decimal(10, 2)
   currency        String       @default("NPR")
+  sizes           String[]
   gender          GenderType?
   garmentType     GarmentType?
   tags            String[]
@@ -160,33 +205,34 @@ model Product {
   updatedAt       DateTime     @updatedAt
 
   store         Store            @relation(fields: [storeId], references: [id])
+  brand         Brand?           @relation(fields: [brandId], references: [id])
   category      Category?        @relation(fields: [categoryId], references: [id])
   variants      ProductVariant[]
   images        ProductImage[]
-  tryOnSessions TryOnSession[]
+  tryOnResults  TryOnResult[]
+  orderItems    OrderItem[]
+  wardrobeItems WardrobeItem[]
 }
 
 model ProductVariant {
-  id            String   @id @default(uuid())
+  id            String  @id @default(uuid())
   productId     String
   size          String?
   color         String?
   colorHex      String?
-  sku           String?  @unique
-  stockQuantity Int      @default(0)
-  priceModifier Decimal  @default(0) @db.Decimal(10, 2)
+  sku           String? @unique
+  stockQuantity Int     @default(0)
+  priceModifier Decimal @default(0) @db.Decimal(10, 2)
   imageUrl      String?
 
-  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product    Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
   cartItems  CartItem[]
-  orderItems OrderItem[]
   wishlists  Wishlist[]
 }
 
 model ProductImage {
   id        String  @id @default(uuid())
   productId String
-  variantId String?
   url       String
   altText   String?
   isPrimary Boolean @default(false)
@@ -194,6 +240,8 @@ model ProductImage {
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 }
+
+// ─── Cart ─────────────────────────────────────────────────────────────────────
 
 model CartItem {
   id        String   @id @default(uuid())
@@ -208,24 +256,24 @@ model CartItem {
   @@unique([userId, variantId])
 }
 
+// ─── Orders ───────────────────────────────────────────────────────────────────
+
 model Order {
-  id                    String      @id @default(uuid())
-  userId                String
-  storeId               String
-  status                OrderStatus @default(pending)
-  subtotal              Decimal     @db.Decimal(10, 2)
-  shippingCost          Decimal     @default(0) @db.Decimal(10, 2)
-  taxAmount             Decimal     @default(0) @db.Decimal(10, 2)
-  totalAmount           Decimal     @db.Decimal(10, 2)
-  currency              String      @default("NPR")
-  stripePaymentIntentId String?     @unique
-  esewaRefId            String?
-  khaltiPidx            String?
-  paymentStatus         String?
-  shippingAddress       Json?
-  notes                 String?
-  createdAt             DateTime    @default(now())
-  updatedAt             DateTime    @updatedAt
+  id              String      @id @default(uuid())
+  userId          String
+  storeId         String
+  status          OrderStatus @default(pending)
+  subtotal        Decimal     @db.Decimal(10, 2)
+  shippingCost    Decimal     @default(0) @db.Decimal(10, 2)
+  taxAmount       Decimal     @default(0) @db.Decimal(10, 2)
+  totalAmount     Decimal     @db.Decimal(10, 2)
+  currency        String      @default("NPR")
+  paymentMethod   String?
+  paymentRef      String?     @unique
+  shippingAddress Json?
+  notes           String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
   user  User        @relation(fields: [userId], references: [id])
   store Store       @relation(fields: [storeId], references: [id])
@@ -233,50 +281,58 @@ model Order {
 }
 
 model OrderItem {
-  id             String   @id @default(uuid())
-  orderId        String
-  variantId      String
-  productName    String
-  variantDetails Json?
-  quantity       Int
-  unitPrice      Decimal  @db.Decimal(10, 2)
-  totalPrice     Decimal  @db.Decimal(10, 2)
+  id           String   @id @default(uuid())
+  orderId      String
+  productId    String
+  productName  String
+  size         String?
+  quantity     Int
+  priceAtTime  Decimal  @db.Decimal(10, 2)
+  totalPrice   Decimal  @db.Decimal(10, 2)
 
-  order   Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  variant ProductVariant @relation(fields: [variantId], references: [id])
-}
-
-model TryOnSession {
-  id                   String      @id @default(uuid())
-  userId               String?
-  productId            String
-  variantId            String?
-  userPhotoUrl         String
-  garmentImageUrl      String
-  resultImageUrl       String?
-  replicatePredictionId String?
-  status               TryOnStatus @default(queued)
-  processingTimeMs     Int?
-  bodyMeasurements     Json?
-  errorMessage         String?
-  createdAt            DateTime    @default(now())
-
-  user    User?   @relation(fields: [userId], references: [id])
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id])
 }
 
-model StyleRecommendation {
-  id                 String                    @id @default(uuid())
-  userId             String
-  sessionType        RecommendationSessionType @default(user_requested)
-  promptUsed         String?
-  claudeResponse     Json?
-  productIdsSuggested String[]
-  userRating         Int?
-  createdAt          DateTime                  @default(now())
+// ─── Try-On ───────────────────────────────────────────────────────────────────
 
-  user User @relation(fields: [userId], references: [id])
+model TryOnResult {
+  id                    String      @id @default(uuid())
+  userId                String?
+  productId             String
+  userPhotoUrl          String
+  garmentImageUrl       String
+  resultImageUrl        String?
+  sizeRecommended       String?
+  replicatePredictionId String?
+  status                TryOnStatus @default(queued)
+  processingTimeMs      Int?
+  bodyMeasurements      Json?
+  errorMessage          String?
+  createdAt             DateTime    @default(now())
+
+  user          User?          @relation(fields: [userId], references: [id])
+  product       Product        @relation(fields: [productId], references: [id])
+  wardrobeItems WardrobeItem[]
 }
+
+// ─── Wardrobe ─────────────────────────────────────────────────────────────────
+
+model WardrobeItem {
+  id            String   @id @default(uuid())
+  userId        String
+  productId     String
+  tryOnResultId String?
+  savedAt       DateTime @default(now())
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product     Product      @relation(fields: [productId], references: [id])
+  tryOnResult TryOnResult? @relation(fields: [tryOnResultId], references: [id])
+
+  @@unique([userId, productId])
+}
+
+// ─── Wishlist ─────────────────────────────────────────────────────────────────
 
 model Wishlist {
   id        String   @id @default(uuid())
@@ -288,4 +344,19 @@ model Wishlist {
   variant ProductVariant @relation(fields: [variantId], references: [id])
 
   @@unique([userId, variantId])
+}
+
+// ─── Recommendations ──────────────────────────────────────────────────────────
+
+model StyleRecommendation {
+  id                  String                    @id @default(uuid())
+  userId              String
+  sessionType         RecommendationSessionType @default(user_requested)
+  promptUsed          String?
+  claudeResponse      Json?
+  productIdsSuggested String[]
+  userRating          Int?
+  createdAt           DateTime                  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
 }
