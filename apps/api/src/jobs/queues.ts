@@ -2,7 +2,8 @@ import { Queue } from "bullmq";
 
 const connection = { url: process.env.REDIS_URL ?? "redis://localhost:6379" };
 
-export const tryOnQueue = new Queue("try-on", { connection });
+// Named to match the plan spec (tryonQueue, emailQueue)
+export const tryonQueue = new Queue("try-on", { connection });
 export const emailQueue = new Queue("email", { connection });
 export const notificationQueue = new Queue("notification", { connection });
 
@@ -18,7 +19,7 @@ export interface EmailJobData {
 }
 
 export async function enqueueTryOnPolling(data: TryOnJobData) {
-  await tryOnQueue.add("poll-result", data, {
+  await tryonQueue.add("poll-result", data, {
     attempts: 30,
     backoff: { type: "fixed", delay: 5000 },
     removeOnComplete: true,

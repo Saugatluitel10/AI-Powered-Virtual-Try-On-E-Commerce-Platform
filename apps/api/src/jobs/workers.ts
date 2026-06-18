@@ -1,8 +1,9 @@
 import { Worker } from "bullmq";
 import { prisma } from "../lib/prisma";
-import { uploadToStorage } from "../lib/supabase";
+import { uploadTryonResult } from "../lib/supabase";
 import { sendOrderConfirmation } from "../lib/resend";
 import type { TryOnJobData, EmailJobData } from "./queues";
+// tryonQueue / emailQueue are consumed by the workers below via BullMQ's Worker name matching
 
 const connection = { url: process.env.REDIS_URL ?? "redis://localhost:6379" };
 
@@ -23,16 +24,14 @@ export const tryOnWorker = new Worker<TryOnJobData>(
     if (result.status === "succeeded" && result.output) {
       const imgRes = await fetch(result.output);
       const buffer = Buffer.from(await imgRes.arrayBuffer());
-      const storageUrl = await uploadToStorage(
-        "try-on-results",
-        `${resultId}.jpg`,
-        buffer,
-        "image/jpeg"
-      );
+
+      // resultId encodes userId:productId — stored as "userId_productId" in job data
+      const [userId = "unknown", productId = "unknown"] = resultId.split("_");
+      const storagePath = await uploadTryonResult(userId, productId, buffer, "image/jpeg");
 
       await prisma.tryOnResult.update({
         where: { id: resultId },
-        data: { status: "completed", resultImageUrl: storageUrl },
+        data: { status: "completed", resultImageUrl: storagePath },
       });
     } else if (result.status === "failed") {
       await prisma.tryOnResult.update({
