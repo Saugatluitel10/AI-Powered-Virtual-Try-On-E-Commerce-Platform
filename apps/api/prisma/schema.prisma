@@ -6,6 +6,14 @@ datasource db {
   provider = "postgresql"
 }
 
+enum BodyType {
+  HOURGLASS
+  PEAR
+  APPLE
+  RECTANGLE
+  INVERTED_TRIANGLE
+}
+
 model User {
   id            String         @id @default(cuid())
   email         String         @unique
@@ -21,18 +29,20 @@ model User {
 }
 
 model BodyProfile {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  user      User     @relation(fields: [userId], references: [id])
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id])
   height    Float?
   weight    Float?
   bust      Float?
   waist     Float?
   hips      Float?
   shoulders Float?
-  bodyType  String?
+  bodyType  BodyType?
   photoUrl  String?
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId])
 }
 
 model StyleProfile {
@@ -43,6 +53,8 @@ model StyleProfile {
   occasions       String[]
   colorPalette    String[]
   updatedAt       DateTime @updatedAt
+
+  @@index([userId])
 }
 
 model Brand {
@@ -71,6 +83,10 @@ model Product {
   tryOnResults  TryOnResult[]
   orderItems    OrderItem[]
   wardrobeItems WardrobeItem[]
+
+  @@index([brandId])
+  @@index([category])
+  @@index([isActive])
 }
 
 model TryOnResult {
@@ -84,6 +100,10 @@ model TryOnResult {
   sizeReasoning   String?
   status          String   @default("pending")
   createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([productId])
+  @@index([status])
 }
 
 model Order {
@@ -97,6 +117,9 @@ model Order {
   paymentRef    String?
   items         OrderItem[]
   createdAt     DateTime    @default(now())
+
+  @@index([userId])
+  @@index([status])
 }
 
 model OrderItem {
@@ -108,6 +131,9 @@ model OrderItem {
   size        String
   quantity    Int
   priceAtTime Float
+
+  @@index([orderId])
+  @@index([productId])
 }
 
 model WardrobeItem {
@@ -118,4 +144,7 @@ model WardrobeItem {
   product       Product  @relation(fields: [productId], references: [id])
   tryOnResultId String?
   savedAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([productId])
 }

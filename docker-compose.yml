@@ -1,7 +1,26 @@
 version: "3.9"
 
 services:
-  # ─── Infrastructure ─────────────────────────────────────────────────────────
+  # ─── PostgreSQL 15 ──────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: vtryon_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: vtryon
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d vtryon"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Redis 7 ────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: vtryon_redis
@@ -16,7 +35,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # ─── Main API: Node.js + Express + Prisma + Supabase ────────────────────────
+  # ─── Main API: Node.js + Express + Prisma ───────────────────────────────────
   backend:
     build:
       context: ./apps/api
@@ -24,18 +43,20 @@ services:
     container_name: vtryon_backend
     restart: unless-stopped
     env_file:
-      - .env
+      - apps/api/.env
     ports:
       - "8000:8000"
     volumes:
       - ./apps/api:/app
       - /app/node_modules
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     command: npm run dev
 
-  # ─── AI Microservice: Python FastAPI (OOTDiffusion/IDM-VTON, MediaPipe, SAM 2, Claude) ──
+  # ─── AI Microservice: Python FastAPI ────────────────────────────────────────
   ai-service:
     build:
       context: ./apps/ai-service
@@ -43,7 +64,7 @@ services:
     container_name: vtryon_ai
     restart: unless-stopped
     env_file:
-      - .env
+      - apps/ai-service/.env
     ports:
       - "8001:8001"
     volumes:
@@ -58,7 +79,7 @@ services:
     container_name: vtryon_frontend
     restart: unless-stopped
     env_file:
-      - .env
+      - apps/web/.env.local
     ports:
       - "3000:3000"
     volumes:
@@ -70,4 +91,5 @@ services:
     command: npm run dev
 
 volumes:
+  postgres_data:
   redis_data:

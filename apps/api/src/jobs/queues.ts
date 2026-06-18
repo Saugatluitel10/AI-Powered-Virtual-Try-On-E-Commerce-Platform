@@ -1,14 +1,13 @@
-import { Queue, Worker, QueueEvents } from "bullmq";
-import { redis } from "../lib/redis";
+import { Queue } from "bullmq";
 
-// ─── Queue definitions ───────────────────────────────────────────────────────
-export const tryOnQueue = new Queue("try-on", { connection: redis });
-export const emailQueue = new Queue("email", { connection: redis });
-export const notificationQueue = new Queue("notification", { connection: redis });
+const connection = { url: process.env.REDIS_URL ?? "redis://localhost:6379" };
 
-// ─── Job type interfaces ──────────────────────────────────────────────────────
+export const tryOnQueue = new Queue("try-on", { connection });
+export const emailQueue = new Queue("email", { connection });
+export const notificationQueue = new Queue("notification", { connection });
+
 export interface TryOnJobData {
-  sessionId: string;
+  resultId: string;
   predictionId: string;
 }
 

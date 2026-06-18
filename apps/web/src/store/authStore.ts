@@ -1,49 +1,23 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
-import type { User } from "@/types/user";
+import type { User, Session } from "@supabase/supabase-js";
 
 interface AuthState {
   user: User | null;
-  accessToken: string | null;
-  refreshToken: string | null;
-  isAuthenticated: boolean;
-  setAuth: (user: User, accessToken: string, refreshToken: string) => void;
-  setUser: (user: User) => void;
-  logout: () => void;
+  session: Session | null;
+  loading: boolean;
+  setAuth: (user: User | null, session: Session | null) => void;
+  setLoading: (loading: boolean) => void;
+  clear: () => void;
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
-      user: null,
-      accessToken: null,
-      refreshToken: null,
-      isAuthenticated: false,
+export const useAuthStore = create<AuthState>()((set) => ({
+  user: null,
+  session: null,
+  loading: true,
 
-      setAuth: (user, accessToken, refreshToken) => {
-        localStorage.setItem("access_token", accessToken);
-        localStorage.setItem("refresh_token", refreshToken);
-        set({ user, accessToken, refreshToken, isAuthenticated: true });
-      },
-
-      setUser: (user) => set({ user }),
-
-      logout: () => {
-        localStorage.removeItem("access_token");
-        localStorage.removeItem("refresh_token");
-        set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false });
-      },
-    }),
-    {
-      name: "auth-storage",
-      partialize: (state) => ({
-        user: state.user,
-        accessToken: state.accessToken,
-        refreshToken: state.refreshToken,
-        isAuthenticated: state.isAuthenticated,
-      }),
-    }
-  )
-);
+  setAuth: (user, session) => set({ user, session, loading: false }),
+  setLoading: (loading) => set({ loading }),
+  clear: () => set({ user: null, session: null, loading: false }),
+}));
