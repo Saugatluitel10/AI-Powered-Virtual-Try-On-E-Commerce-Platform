@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import type { Cart, CartItem } from "@/types/order";
+import type { Cart } from "@/types/order";
 import api from "@/lib/api";
 
 interface CartState {

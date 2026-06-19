@@ -12,6 +12,7 @@ export const supabase = createClient(supabaseUrl, supabaseServiceKey, {
 export const BUCKETS = {
   USER_PHOTOS: "user-photos",
   TRYON_RESULTS: "tryon-results",
+  GARMENT_SEGMENTS: "garment-segments",
 } as const;
 
 type Bucket = (typeof BUCKETS)[keyof typeof BUCKETS];

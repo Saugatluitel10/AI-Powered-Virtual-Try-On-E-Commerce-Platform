@@ -1,14 +1,26 @@
 name: Deploy
 
+# Only runs after CI passes on main — never on PRs
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
     branches: [main]
+    types: [completed]
 
 jobs:
+  # ─── Guard: skip everything if CI failed ──────────────────────────────────
+  check-ci:
+    name: Check CI result
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      - run: echo "CI passed — proceeding with deploy"
+
   # ─── Frontend → Vercel ────────────────────────────────────────────────────
   deploy-frontend:
-    name: Deploy Frontend to Vercel
+    name: Deploy Frontend → Vercel
     runs-on: ubuntu-latest
+    needs: check-ci
     defaults:
       run:
         working-directory: apps/web
@@ -16,24 +28,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 9
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: pnpm
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
 
       - name: Install Vercel CLI
-        run: npm install -g vercel
+        run: npm install -g vercel@latest
 
-      - name: Pull Vercel environment
+      - name: Pull Vercel environment info
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
 
-      - name: Build project
+      - name: Build (Vercel)
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Deploy to Vercel
@@ -41,9 +49,12 @@ jobs:
 
   # ─── Backend → Railway ────────────────────────────────────────────────────
   deploy-backend:
-    name: Deploy Backend to Railway
+    name: Deploy Backend → Railway
     runs-on: ubuntu-latest
-    needs: []
+    needs: check-ci
+    defaults:
+      run:
+        working-directory: apps/api
 
     steps:
       - uses: actions/checkout@v4
@@ -51,16 +62,19 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: Deploy backend service
-        run: railway up --service backend --detach
-        working-directory: apps/api
+      - name: Deploy to Railway
+        run: railway up --service api --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
   # ─── AI Service → Modal ───────────────────────────────────────────────────
   deploy-ai-service:
-    name: Deploy AI Service to Modal
+    name: Deploy AI Service → Modal
     runs-on: ubuntu-latest
+    needs: check-ci
+    defaults:
+      run:
+        working-directory: apps/ai-service
 
     steps:
       - uses: actions/checkout@v4
@@ -75,7 +89,6 @@ jobs:
 
       - name: Deploy to Modal
         run: modal deploy app/modal_app.py
-        working-directory: apps/ai-service
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}

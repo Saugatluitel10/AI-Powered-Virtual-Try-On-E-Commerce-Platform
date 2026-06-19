@@ -6,6 +6,7 @@ import { ShoppingBag, Sparkles, User, Menu, X, LogOut } from "lucide-react";
 import { useState } from "react";
 import { useAuthStore } from "@/store/authStore";
 import { useCartStore } from "@/store/cartStore";
+import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 
 const navLinks = [
@@ -17,9 +18,11 @@ const navLinks = [
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
-  const { isAuthenticated, user, logout } = useAuthStore();
+  const { user: storeUser } = useAuthStore();
+  const { signOut } = useAuth();
+  const isAuthenticated = !!storeUser;
   const { cart } = useCartStore();
-  const itemCount = cart?.item_count ?? 0;
+  const itemCount = cart?.itemCount ?? 0;
 
   return (
     <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
@@ -69,7 +72,7 @@ export default function Navbar() {
                   <User className="w-5 h-5" />
                 </Link>
                 <button
-                  onClick={logout}
+                  onClick={signOut}
                   className="p-2 text-gray-600 hover:text-red-500 transition-colors"
                 >
                   <LogOut className="w-5 h-5" />

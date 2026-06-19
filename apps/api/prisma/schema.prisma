@@ -67,39 +67,51 @@ model Brand {
 }
 
 model Product {
-  id            String         @id @default(cuid())
-  name          String
-  slug          String         @unique
-  brandId       String
-  brand         Brand          @relation(fields: [brandId], references: [id])
-  price         Float
-  currency      String         @default("NPR")
-  sizes         String[]
-  category      String
-  images        String[]
-  description   String?
-  isActive      Boolean        @default(true)
-  createdAt     DateTime       @default(now())
-  tryOnResults  TryOnResult[]
-  orderItems    OrderItem[]
-  wardrobeItems WardrobeItem[]
+  id                String         @id @default(cuid())
+  name              String
+  slug              String         @unique
+  brandId           String
+  brand             Brand          @relation(fields: [brandId], references: [id])
+  price             Float
+  currency          String         @default("NPR")
+  sizes             String[]
+  category          String
+  garmentType       String?
+  gender            String?
+  isTryonEnabled    Boolean        @default(false)
+  suitableBodyTypes String[]
+  images            String[]
+  description       String?
+  isActive          Boolean        @default(true)
+  createdAt         DateTime       @default(now())
+  tryOnResults      TryOnResult[]
+  orderItems        OrderItem[]
+  wardrobeItems     WardrobeItem[]
 
   @@index([brandId])
   @@index([category])
+  @@index([garmentType])
+  @@index([gender])
+  @@index([isTryonEnabled])
   @@index([isActive])
 }
 
 model TryOnResult {
-  id              String   @id @default(cuid())
-  userId          String
-  user            User     @relation(fields: [userId], references: [id])
-  productId       String
-  product         Product  @relation(fields: [productId], references: [id])
-  resultImageUrl  String?
-  sizeRecommended String?
-  sizeReasoning   String?
-  status          String   @default("pending")
-  createdAt       DateTime @default(now())
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
+  productId        String
+  product          Product  @relation(fields: [productId], references: [id])
+  userPhotoUrl     String?
+  garmentImageUrl  String?
+  resultImageUrl   String?
+  predictionId     String?
+  sizeRecommended  String?
+  sizeReasoning    String?
+  status           String   @default("pending")
+  processingTimeMs Int?
+  errorMessage     String?
+  createdAt        DateTime @default(now())
 
   @@index([userId])
   @@index([productId])

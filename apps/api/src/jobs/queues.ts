@@ -2,14 +2,18 @@ import { Queue } from "bullmq";
 
 const connection = { url: process.env.REDIS_URL ?? "redis://localhost:6379" };
 
-// Named to match the plan spec (tryonQueue, emailQueue)
 export const tryonQueue = new Queue("try-on", { connection });
 export const emailQueue = new Queue("email", { connection });
+export const bodyAnalysisQueue = new Queue("body-analysis", { connection });
 export const notificationQueue = new Queue("notification", { connection });
 
 export interface TryOnJobData {
   resultId: string;
-  predictionId: string;
+  userId: string;
+  productId: string;
+  userPhotoUrl: string;
+  garmentImageUrl: string;
+  productName: string;
 }
 
 export interface EmailJobData {
@@ -18,10 +22,14 @@ export interface EmailJobData {
   payload: Record<string, unknown>;
 }
 
-export async function enqueueTryOnPolling(data: TryOnJobData) {
-  await tryonQueue.add("poll-result", data, {
-    attempts: 30,
-    backoff: { type: "fixed", delay: 5000 },
+export interface BodyAnalysisJobData {
+  userId: string;
+  storagePath: string;
+}
+
+export async function enqueueTryOn(data: TryOnJobData) {
+  await tryonQueue.add("try-on", data, {
+    attempts: 1,
     removeOnComplete: true,
     removeOnFail: 100,
   });
@@ -32,5 +40,14 @@ export async function enqueueEmail(data: EmailJobData) {
     attempts: 3,
     backoff: { type: "exponential", delay: 2000 },
     removeOnComplete: true,
+  });
+}
+
+export async function enqueueBodyAnalysis(data: BodyAnalysisJobData) {
+  await bodyAnalysisQueue.add("analyze", data, {
+    attempts: 3,
+    backoff: { type: "exponential", delay: 3000 },
+    removeOnComplete: true,
+    removeOnFail: 50,
   });
 }

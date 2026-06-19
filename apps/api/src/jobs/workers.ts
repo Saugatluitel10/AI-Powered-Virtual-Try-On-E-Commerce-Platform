@@ -1,46 +1,163 @@
 import { Worker } from "bullmq";
+import { BodyType } from "@prisma/client";
 import { prisma } from "../lib/prisma";
-import { uploadTryonResult } from "../lib/supabase";
+import { uploadTryonResult, getSignedUrl, BUCKETS } from "../lib/supabase";
 import { sendOrderConfirmation } from "../lib/resend";
-import type { TryOnJobData, EmailJobData } from "./queues";
-// tryonQueue / emailQueue are consumed by the workers below via BullMQ's Worker name matching
+import type { TryOnJobData, EmailJobData, BodyAnalysisJobData } from "./queues";
 
 const connection = { url: process.env.REDIS_URL ?? "redis://localhost:6379" };
+const AI_SERVICE_URL = process.env.AI_SERVICE_URL ?? "http://localhost:8001";
 
-// ─── Try-on polling worker ────────────────────────────────────────────────────
+// ─── Try-on worker ───────────────────────────────────────────────────────────
+// Calls the AI service's synchronous /try-on/try-on endpoint (up to 60s),
+// downloads the result image, and saves it to Supabase Storage + Postgres.
 export const tryOnWorker = new Worker<TryOnJobData>(
   "try-on",
   async (job) => {
-    const { resultId, predictionId } = job.data;
-    const AI_SERVICE_URL = process.env.AI_SERVICE_URL ?? "http://localhost:8001";
+    const { resultId, userId, productId, userPhotoUrl, garmentImageUrl, productName } =
+      job.data;
 
-    const response = await fetch(`${AI_SERVICE_URL}/try-on/status/${predictionId}`);
-    const result = (await response.json()) as {
-      status: string;
-      output?: string;
-      error?: string;
+    // Mark as processing
+    await prisma.tryOnResult.update({
+      where: { id: resultId },
+      data: { status: "processing" },
+    });
+
+    // Call AI service — synchronous try-on (polls internally up to 60s)
+    const aiRes = await fetch(`${AI_SERVICE_URL}/try-on/try-on`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_photo_url: userPhotoUrl,
+        garment_url: garmentImageUrl,
+        product_id: productId,
+        garment_description: productName,
+      }),
+    });
+
+    if (aiRes.status === 408) {
+      // Timeout — AI service returns 408
+      const body = (await aiRes.json()) as { detail?: string };
+      await prisma.tryOnResult.update({
+        where: { id: resultId },
+        data: {
+          status: "failed",
+          errorMessage: body.detail ?? "Try-on timed out.",
+        },
+      });
+      return;
+    }
+
+    if (!aiRes.ok) {
+      const body = (await aiRes.json().catch(() => ({}))) as { detail?: string };
+      await prisma.tryOnResult.update({
+        where: { id: resultId },
+        data: {
+          status: "failed",
+          errorMessage: body.detail ?? `AI service returned ${aiRes.status}`,
+        },
+      });
+      return;
+    }
+
+    const result = (await aiRes.json()) as {
+      prediction_id: string;
+      result_url: string;
+      processing_time_ms: number;
     };
 
-    if (result.status === "succeeded" && result.output) {
-      const imgRes = await fetch(result.output);
-      const buffer = Buffer.from(await imgRes.arrayBuffer());
-
-      // resultId encodes userId:productId — stored as "userId_productId" in job data
-      const [userId = "unknown", productId = "unknown"] = resultId.split("_");
-      const storagePath = await uploadTryonResult(userId, productId, buffer, "image/jpeg");
-
+    // Download the result image from Replicate and re-upload to our storage
+    const imgRes = await fetch(result.result_url);
+    if (!imgRes.ok) {
       await prisma.tryOnResult.update({
         where: { id: resultId },
-        data: { status: "completed", resultImageUrl: storagePath },
+        data: {
+          status: "failed",
+          predictionId: result.prediction_id,
+          processingTimeMs: result.processing_time_ms,
+          errorMessage: "Failed to download result image from model.",
+        },
       });
-    } else if (result.status === "failed") {
-      await prisma.tryOnResult.update({
-        where: { id: resultId },
-        data: { status: "failed" },
-      });
-    } else {
-      throw new Error(`Prediction still ${result.status}`);
+      return;
     }
+
+    const buffer = Buffer.from(await imgRes.arrayBuffer());
+    const storagePath = await uploadTryonResult(userId, productId, buffer, "image/jpeg");
+
+    await prisma.tryOnResult.update({
+      where: { id: resultId },
+      data: {
+        status: "completed",
+        resultImageUrl: storagePath,
+        predictionId: result.prediction_id,
+        processingTimeMs: result.processing_time_ms,
+      },
+    });
+  },
+  { connection, concurrency: 3 }
+);
+
+// ─── Body analysis worker ─────────────────────────────────────────────────────
+const VALID_BODY_TYPES = new Set<string>(Object.values(BodyType));
+
+export const bodyAnalysisWorker = new Worker<BodyAnalysisJobData>(
+  "body-analysis",
+  async (job) => {
+    const { userId, storagePath } = job.data;
+
+    const signedUrl = await getSignedUrl(BUCKETS.USER_PHOTOS, storagePath, 300);
+    const imgRes = await fetch(signedUrl);
+    if (!imgRes.ok) {
+      throw new Error(`Failed to download photo: ${imgRes.statusText}`);
+    }
+    const buffer = Buffer.from(await imgRes.arrayBuffer());
+    const imageBase64 = buffer.toString("base64");
+
+    const aiRes = await fetch(`${AI_SERVICE_URL}/body/analyze-body`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image_base64: imageBase64 }),
+    });
+
+    if (!aiRes.ok) {
+      const errBody = (await aiRes.json()) as { detail?: string };
+      throw new Error(errBody.detail ?? `AI service error ${aiRes.status}`);
+    }
+
+    const result = (await aiRes.json()) as {
+      height_cm: number;
+      shoulder_cm: number;
+      bust_cm: number;
+      waist_cm: number;
+      hips_cm: number;
+      body_type: string;
+      confidence: number;
+    };
+
+    if (!VALID_BODY_TYPES.has(result.body_type)) {
+      throw new Error(`Unrecognised body type: ${result.body_type}`);
+    }
+
+    await prisma.bodyProfile.upsert({
+      where: { userId },
+      update: {
+        height: result.height_cm,
+        bust: result.bust_cm,
+        waist: result.waist_cm,
+        hips: result.hips_cm,
+        shoulders: result.shoulder_cm,
+        bodyType: result.body_type as BodyType,
+      },
+      create: {
+        userId,
+        height: result.height_cm,
+        bust: result.bust_cm,
+        waist: result.waist_cm,
+        hips: result.hips_cm,
+        shoulders: result.shoulder_cm,
+        bodyType: result.body_type as BodyType,
+      },
+    });
   },
   { connection, concurrency: 5 }
 );
@@ -64,6 +181,10 @@ export const emailWorker = new Worker<EmailJobData>(
 
 tryOnWorker.on("failed", (job, err) => {
   console.error(`[TryOn worker] job ${job?.id} failed:`, err.message);
+});
+
+bodyAnalysisWorker.on("failed", (job, err) => {
+  console.error(`[BodyAnalysis worker] job ${job?.id} failed:`, err.message);
 });
 
 emailWorker.on("failed", (job, err) => {

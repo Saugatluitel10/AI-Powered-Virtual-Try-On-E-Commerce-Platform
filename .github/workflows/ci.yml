@@ -18,35 +18,39 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 9
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: pnpm
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-        working-directory: .
+        run: npm ci
 
       - name: Lint
-        run: pnpm lint
+        run: npm run lint
 
       - name: Type check
-        run: pnpm type-check
-
-      - name: Build
-        run: pnpm build
+        run: npm run type-check
         env:
+          # Stub public vars so tsc can resolve them without real secrets
           NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
           NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: placeholder
           NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_placeholder
 
-  # ─── Backend: generate + type-check + build ───────────────────────────────
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+          NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: placeholder
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_placeholder
+
+  # ─── Backend: generate Prisma client + type-check + build ─────────────────
   backend:
     name: Backend CI
     runs-on: ubuntu-latest
@@ -57,31 +61,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 9
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: pnpm
+          cache: npm
+          cache-dependency-path: apps/api/package-lock.json
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-        working-directory: .
+        run: npm ci
 
       - name: Generate Prisma client
-        run: pnpm db:generate
+        run: npm run db:generate
+        env:
+          # prisma generate reads schema only — URL is not used at generate time
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vtryon
 
       - name: Type check
-        run: pnpm type-check
+        run: npm run type-check
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vtryon
 
       - name: Build
-        run: pnpm build
+        run: npm run build
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vtryon
 
-  # ─── AI Service: lint ─────────────────────────────────────────────────────
+  # ─── AI Service: ruff lint ─────────────────────────────────────────────────
   ai-service:
     name: AI Service CI
     runs-on: ubuntu-latest
@@ -97,9 +103,10 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+          cache-dependency-path: apps/ai-service/requirements.txt
 
-      - name: Install dependencies
-        run: pip install fastapi pydantic pydantic-settings uvicorn ruff
+      - name: Install lint dependencies
+        run: pip install ruff
 
       - name: Lint (ruff)
-        run: ruff check app/ || true
+        run: ruff check app/
