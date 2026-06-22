@@ -157,8 +157,26 @@ router.get("/:id", async (req: Request, res) => {
   }
 });
 
+// ─── GET /api/v1/products/:id/size-recommendation ─────────────────────────────
+import { verifyJwt, type AuthRequest } from "../middleware/auth";
+import { recommendSize } from "../lib/sizeRecommender";
+
+router.get("/:id/size-recommendation", verifyJwt, async (req: AuthRequest, res) => {
+  try {
+    const recommendation = await recommendSize(req.userId!, req.params.id);
+    if (!recommendation) {
+      return res.status(404).json({
+        error: "Unable to generate size recommendation. Please complete your body profile first.",
+      });
+    }
+    return res.json({ data: recommendation });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error generating size recommendation";
+    return res.status(500).json({ error: message });
+  }
+});
+
 // ─── POST /api/v1/products (retailer_admin only — placeholder) ────────────────
-import { verifyJwt } from "../middleware/auth";
 
 router.post("/", verifyJwt, (_req, res) => {
   res.json({ ok: true, route: "POST /products" });

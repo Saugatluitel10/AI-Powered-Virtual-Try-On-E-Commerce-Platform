@@ -7,6 +7,7 @@ import productRoutes from "./routes/products";
 import orderRoutes from "./routes/orders";
 import tryOnRoutes from "./routes/tryOn";
 import recommendationRoutes from "./routes/recommendations";
+import wardrobeRoutes from "./routes/wardrobe";
 import adminRoutes from "./routes/admin";
 
 const app = express();
@@ -37,6 +38,7 @@ app.use(`${v1}/products`, productRoutes);
 app.use(`${v1}/orders`, orderRoutes);
 app.use(`${v1}/try-on`, tryOnRoutes);
 app.use(`${v1}/recommendations`, recommendationRoutes);
+app.use(`${v1}/wardrobe`, wardrobeRoutes);
 app.use(`${v1}/admin`, adminRoutes);
 
 // ─── 404 ──────────────────────────────────────────────────────────────────────

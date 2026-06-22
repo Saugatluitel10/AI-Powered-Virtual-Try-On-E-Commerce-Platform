@@ -15,17 +15,19 @@ enum BodyType {
 }
 
 model User {
-  id            String         @id @default(cuid())
-  email         String         @unique
-  name          String?
-  avatarUrl     String?
-  supabaseId    String         @unique
-  createdAt     DateTime       @default(now())
-  bodyProfile   BodyProfile?
-  styleProfile  StyleProfile?
-  orders        Order[]
-  wardrobeItems WardrobeItem[]
-  tryOnResults  TryOnResult[]
+  id                  String               @id @default(cuid())
+  email               String               @unique
+  name                String?
+  avatarUrl           String?
+  supabaseId          String               @unique
+  createdAt           DateTime             @default(now())
+  bodyProfile         BodyProfile?
+  styleProfile        StyleProfile?
+  orders              Order[]
+  wardrobeItems       WardrobeItem[]
+  tryOnResults        TryOnResult[]
+  conversations       Conversation[]
+  wardrobeCollections WardrobeCollection[]
 }
 
 model BodyProfile {
@@ -52,18 +54,37 @@ model StyleProfile {
   preferredStyles String[]
   occasions       String[]
   colorPalette    String[]
+  quizCompleted   Boolean  @default(false)
   updatedAt       DateTime @updatedAt
 
   @@index([userId])
 }
 
 model Brand {
-  id             String    @id @default(cuid())
+  id             String      @id @default(cuid())
   name           String
   logo           String?
-  commissionRate Float     @default(0.10)
-  isVerified     Boolean   @default(false)
+  commissionRate Float       @default(0.10)
+  isVerified     Boolean     @default(false)
   products       Product[]
+  sizeCharts     SizeChart[]
+}
+
+model SizeChart {
+  id        String @id @default(cuid())
+  brandId   String
+  brand     Brand  @relation(fields: [brandId], references: [id])
+  size      String
+  bustMin   Float?
+  bustMax   Float?
+  waistMin  Float?
+  waistMax  Float?
+  hipsMin   Float?
+  hipsMax   Float?
+  sortOrder Int    @default(0)
+
+  @@unique([brandId, size])
+  @@index([brandId])
 }
 
 model Product {
@@ -149,14 +170,55 @@ model OrderItem {
 }
 
 model WardrobeItem {
-  id            String   @id @default(cuid())
+  id            String              @id @default(cuid())
   userId        String
-  user          User     @relation(fields: [userId], references: [id])
+  user          User                @relation(fields: [userId], references: [id])
   productId     String
-  product       Product  @relation(fields: [productId], references: [id])
+  product       Product             @relation(fields: [productId], references: [id])
   tryOnResultId String?
-  savedAt       DateTime @default(now())
+  collectionId  String?
+  collection    WardrobeCollection? @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+  savedAt       DateTime            @default(now())
 
   @@index([userId])
   @@index([productId])
+  @@index([collectionId])
+}
+
+model WardrobeCollection {
+  id         String         @id @default(cuid())
+  userId     String
+  user       User           @relation(fields: [userId], references: [id])
+  name       String
+  shareToken String?        @unique
+  isPublic   Boolean        @default(false)
+  items      WardrobeItem[]
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@index([userId])
+  @@index([shareToken])
+}
+
+model Conversation {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  title     String?
+  messages  Message[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  content        String
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId])
 }

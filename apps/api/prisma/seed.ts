@@ -438,6 +438,41 @@ async function main() {
   );
   console.log(`Products: ${products.length} seeded`);
 
+  // ─── Size Charts ──────────────────────────────────────────────────────────
+  const sizeChartData = [
+    // Himalayan Threads
+    { brandId: himalayan.id, size: "XS", bustMin: 78, bustMax: 82, waistMin: 60, waistMax: 64, hipsMin: 84, hipsMax: 88, sortOrder: 0 },
+    { brandId: himalayan.id, size: "S",  bustMin: 82, bustMax: 86, waistMin: 64, waistMax: 68, hipsMin: 88, hipsMax: 92, sortOrder: 1 },
+    { brandId: himalayan.id, size: "M",  bustMin: 86, bustMax: 92, waistMin: 68, waistMax: 74, hipsMin: 92, hipsMax: 98, sortOrder: 2 },
+    { brandId: himalayan.id, size: "L",  bustMin: 92, bustMax: 100, waistMin: 74, waistMax: 82, hipsMin: 98, hipsMax: 106, sortOrder: 3 },
+    { brandId: himalayan.id, size: "XL", bustMin: 100, bustMax: 108, waistMin: 82, waistMax: 90, hipsMin: 106, hipsMax: 114, sortOrder: 4 },
+    { brandId: himalayan.id, size: "XXL", bustMin: 108, bustMax: 118, waistMin: 90, waistMax: 100, hipsMin: 114, hipsMax: 124, sortOrder: 5 },
+    // Urban Nepal
+    { brandId: urban.id, size: "XS", bustMin: 76, bustMax: 82, waistMin: 58, waistMax: 64, hipsMin: 82, hipsMax: 88, sortOrder: 0 },
+    { brandId: urban.id, size: "S",  bustMin: 82, bustMax: 88, waistMin: 64, waistMax: 70, hipsMin: 88, hipsMax: 94, sortOrder: 1 },
+    { brandId: urban.id, size: "M",  bustMin: 88, bustMax: 94, waistMin: 70, waistMax: 76, hipsMin: 94, hipsMax: 100, sortOrder: 2 },
+    { brandId: urban.id, size: "L",  bustMin: 94, bustMax: 102, waistMin: 76, waistMax: 84, hipsMin: 100, hipsMax: 108, sortOrder: 3 },
+    { brandId: urban.id, size: "XL", bustMin: 102, bustMax: 110, waistMin: 84, waistMax: 92, hipsMin: 108, hipsMax: 116, sortOrder: 4 },
+    { brandId: urban.id, size: "XXL", bustMin: 110, bustMax: 120, waistMin: 92, waistMax: 102, hipsMin: 116, hipsMax: 126, sortOrder: 5 },
+    // Heritage Weaves
+    { brandId: heritage.id, size: "XS", bustMin: 78, bustMax: 84, waistMin: 60, waistMax: 66, hipsMin: 84, hipsMax: 90, sortOrder: 0 },
+    { brandId: heritage.id, size: "S",  bustMin: 84, bustMax: 90, waistMin: 66, waistMax: 72, hipsMin: 90, hipsMax: 96, sortOrder: 1 },
+    { brandId: heritage.id, size: "M",  bustMin: 90, bustMax: 96, waistMin: 72, waistMax: 78, hipsMin: 96, hipsMax: 102, sortOrder: 2 },
+    { brandId: heritage.id, size: "L",  bustMin: 96, bustMax: 104, waistMin: 78, waistMax: 86, hipsMin: 102, hipsMax: 110, sortOrder: 3 },
+    { brandId: heritage.id, size: "XL", bustMin: 104, bustMax: 112, waistMin: 86, waistMax: 94, hipsMin: 110, hipsMax: 118, sortOrder: 4 },
+  ];
+
+  for (const sc of sizeChartData) {
+    await prisma.sizeChart.upsert({
+      where: {
+        brandId_size: { brandId: sc.brandId, size: sc.size },
+      },
+      update: sc,
+      create: sc,
+    });
+  }
+  console.log(`SizeCharts: ${sizeChartData.length} seeded`);
+
   // ─── Test user ────────────────────────────────────────────────────────────
   const user = await prisma.user.upsert({
     where: { email: "test@vtryon.com" },

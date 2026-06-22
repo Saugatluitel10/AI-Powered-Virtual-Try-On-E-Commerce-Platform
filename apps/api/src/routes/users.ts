@@ -128,18 +128,82 @@ router.put("/me/body-profile", verifyJwt, (_req, res) => {
 });
 
 // GET /api/v1/users/me/style-profile
-router.get("/me/style-profile", verifyJwt, (_req, res) => {
-  res.json({ ok: true, route: "GET /users/me/style-profile" });
+router.get("/me/style-profile", verifyJwt, async (req: AuthRequest, res) => {
+  try {
+    const profile = await prisma.styleProfile.findUnique({
+      where: { userId: req.userId! },
+    });
+    if (!profile) {
+      return res.json({
+        data: {
+          preferredStyles: [],
+          occasions: [],
+          colorPalette: [],
+          quizCompleted: false,
+        },
+      });
+    }
+    return res.json({
+      data: {
+        id: profile.id,
+        preferredStyles: profile.preferredStyles,
+        occasions: profile.occasions,
+        colorPalette: profile.colorPalette,
+        quizCompleted: profile.quizCompleted,
+        updatedAt: profile.updatedAt.toISOString(),
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error fetching style profile";
+    return res.status(500).json({ error: message });
+  }
 });
 
 // PUT /api/v1/users/me/style-profile
-router.put("/me/style-profile", verifyJwt, (_req, res) => {
-  res.json({ ok: true, route: "PUT /users/me/style-profile" });
+router.put("/me/style-profile", verifyJwt, async (req: AuthRequest, res) => {
+  try {
+    const { preferredStyles, occasions, colorPalette } = req.body as {
+      preferredStyles?: string[];
+      occasions?: string[];
+      colorPalette?: string[];
+    };
+
+    const profile = await prisma.styleProfile.upsert({
+      where: { userId: req.userId! },
+      update: {
+        ...(preferredStyles && { preferredStyles }),
+        ...(occasions && { occasions }),
+        ...(colorPalette && { colorPalette }),
+        quizCompleted: true,
+      },
+      create: {
+        userId: req.userId!,
+        preferredStyles: preferredStyles ?? [],
+        occasions: occasions ?? [],
+        colorPalette: colorPalette ?? [],
+        quizCompleted: true,
+      },
+    });
+
+    return res.json({
+      data: {
+        id: profile.id,
+        preferredStyles: profile.preferredStyles,
+        occasions: profile.occasions,
+        colorPalette: profile.colorPalette,
+        quizCompleted: profile.quizCompleted,
+        updatedAt: profile.updatedAt.toISOString(),
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error saving style profile";
+    return res.status(500).json({ error: message });
+  }
 });
 
-// GET /api/v1/users/me/wardrobe
+// GET /api/v1/users/me/wardrobe — redirects to /wardrobe
 router.get("/me/wardrobe", verifyJwt, (_req, res) => {
-  res.json({ ok: true, route: "GET /users/me/wardrobe" });
+  res.redirect(308, "/api/v1/wardrobe");
 });
 
 export default router;
