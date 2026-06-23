@@ -120,21 +120,22 @@ model Product {
 }
 
 model TryOnResult {
-  id               String   @id @default(cuid())
+  id               String         @id @default(cuid())
   userId           String
-  user             User     @relation(fields: [userId], references: [id])
+  user             User           @relation(fields: [userId], references: [id])
   productId        String
-  product          Product  @relation(fields: [productId], references: [id])
+  product          Product        @relation(fields: [productId], references: [id])
   userPhotoUrl     String?
   garmentImageUrl  String?
   resultImageUrl   String?
   predictionId     String?
   sizeRecommended  String?
   sizeReasoning    String?
-  status           String   @default("pending")
+  status           String         @default("pending")
   processingTimeMs Int?
   errorMessage     String?
-  createdAt        DateTime @default(now())
+  createdAt        DateTime       @default(now())
+  wardrobeItems    WardrobeItem[]
 
   @@index([userId])
   @@index([productId])
@@ -193,6 +194,7 @@ model WardrobeItem {
   productId     String
   product       Product             @relation(fields: [productId], references: [id])
   tryOnResultId String?
+  tryOnResult   TryOnResult?        @relation(fields: [tryOnResultId], references: [id], onDelete: SetNull)
   collectionId  String?
   collection    WardrobeCollection? @relation(fields: [collectionId], references: [id], onDelete: SetNull)
   savedAt       DateTime            @default(now())
