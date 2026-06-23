@@ -9,14 +9,16 @@ export type OrderStatus =
 
 export interface CartItem {
   id: string;
-  variantId: string;
-  quantity: number;
-  addedAt: string;
-  productName: string | null;
+  productId: string;
+  productName: string;
+  productSlug: string;
   productImage: string | null;
-  size: string | null;
-  color: string | null;
-  unitPrice: number | null;
+  brandName: string | null;
+  size: string;
+  quantity: number;
+  unitPrice: number;
+  currency: string;
+  addedAt: string;
 }
 
 export interface Cart {

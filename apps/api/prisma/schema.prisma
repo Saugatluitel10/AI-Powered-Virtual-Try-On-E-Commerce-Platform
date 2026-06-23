@@ -24,6 +24,7 @@ model User {
   bodyProfile         BodyProfile?
   styleProfile        StyleProfile?
   orders              Order[]
+  cartItems           CartItem[]
   wardrobeItems       WardrobeItem[]
   tryOnResults        TryOnResult[]
   conversations       Conversation[]
@@ -107,6 +108,7 @@ model Product {
   createdAt         DateTime       @default(now())
   tryOnResults      TryOnResult[]
   orderItems        OrderItem[]
+  cartItems         CartItem[]
   wardrobeItems     WardrobeItem[]
 
   @@index([brandId])
@@ -139,17 +141,32 @@ model TryOnResult {
   @@index([status])
 }
 
+model CartItem {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  size      String
+  quantity  Int      @default(1)
+  addedAt   DateTime @default(now())
+
+  @@unique([userId, productId, size])
+  @@index([userId])
+}
+
 model Order {
-  id            String      @id @default(cuid())
-  userId        String
-  user          User        @relation(fields: [userId], references: [id])
-  status        String      @default("pending")
-  totalAmount   Float
-  currency      String      @default("NPR")
-  paymentMethod String?
-  paymentRef    String?
-  items         OrderItem[]
-  createdAt     DateTime    @default(now())
+  id              String      @id @default(cuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id])
+  status          String      @default("pending")
+  totalAmount     Float
+  currency        String      @default("NPR")
+  paymentMethod   String?
+  paymentRef      String?
+  shippingAddress Json?
+  items           OrderItem[]
+  createdAt       DateTime    @default(now())
 
   @@index([userId])
   @@index([status])
