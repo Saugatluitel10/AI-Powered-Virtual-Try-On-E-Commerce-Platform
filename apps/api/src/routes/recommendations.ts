@@ -83,7 +83,7 @@ router.post("/chat", verifyJwt, async (req: AuthRequest, res) => {
 
     const productCatalog = products
       .map(
-        (p) =>
+        (p: typeof products[number]) =>
           `- ${p.name} (${p.category}, ${p.gender}, Rs. ${p.price}) — Sizes: ${p.sizes.join(",")} — Suits: ${p.suitableBodyTypes.join(",")}${p.description ? ` — ${p.description}` : ""}`
       )
       .join("\n");
@@ -103,7 +103,7 @@ router.post("/chat", verifyJwt, async (req: AuthRequest, res) => {
       });
       if (existing) {
         conversation = existing;
-        priorMessages = existing.messages.map((m) => ({
+        priorMessages = existing.messages.map((m: { role: string; content: string }) => ({
           role: m.role,
           content: m.content,
         }));
@@ -228,7 +228,7 @@ router.get("/conversations", verifyJwt, async (req: AuthRequest, res) => {
 router.get("/conversations/:id", verifyJwt, async (req: AuthRequest, res) => {
   try {
     const conversation = await prisma.conversation.findFirst({
-      where: { id: req.params.id, userId: req.userId! },
+      where: { id: req.params.id as string, userId: req.userId! },
       include: {
         messages: { orderBy: { createdAt: "asc" } },
       },
@@ -240,7 +240,7 @@ router.get("/conversations/:id", verifyJwt, async (req: AuthRequest, res) => {
       data: {
         id: conversation.id,
         title: conversation.title,
-        messages: conversation.messages.map((m) => ({
+        messages: conversation.messages.map((m: { id: string; role: string; content: string; createdAt: Date }) => ({
           id: m.id,
           role: m.role,
           content: m.content,

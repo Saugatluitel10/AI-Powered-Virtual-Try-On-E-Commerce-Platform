@@ -1,5 +1,4 @@
 import { Router, type Request } from "express";
-import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 
 const router = Router();
@@ -44,11 +43,11 @@ router.get("/", async (req: Request, res) => {
           data: { items: [], total: 0, page: pageNum, pageSize: pageSizeNum, totalPages: 0 },
         });
       }
-      searchIds = rows.map((r) => r.id);
+      searchIds = rows.map((r: { id: string }) => r.id);
     }
 
     // ── Build Prisma where clause ─────────────────────────────────────────
-    const where: Prisma.ProductWhereInput = { isActive: true };
+    const where: Record<string, unknown> = { isActive: true };
 
     if (searchIds) where.id = { in: searchIds };
     if (category) where.category = category;
@@ -58,7 +57,7 @@ router.get("/", async (req: Request, res) => {
     if (bodyType) where.suitableBodyTypes = { has: bodyType.toUpperCase() };
     if (isTryonEnabled === "true") where.isTryonEnabled = true;
 
-    const priceFilter: Prisma.FloatFilter = {};
+    const priceFilter: Record<string, number> = {};
     if (minPrice) priceFilter.gte = parseFloat(minPrice);
     if (maxPrice) priceFilter.lte = parseFloat(maxPrice);
     if (priceFilter.gte !== undefined || priceFilter.lte !== undefined) {
@@ -66,12 +65,12 @@ router.get("/", async (req: Request, res) => {
     }
 
     // ── Order ─────────────────────────────────────────────────────────────
-    const orderBy: Prisma.ProductOrderByWithRelationInput =
+    const orderBy =
       sort === "price_asc"
-        ? { price: "asc" }
+        ? { price: "asc" as const }
         : sort === "price_desc"
-        ? { price: "desc" }
-        : { createdAt: "desc" };
+        ? { price: "desc" as const }
+        : { createdAt: "desc" as const };
 
     // ── Execute ───────────────────────────────────────────────────────────
     const [total, products] = await Promise.all([
@@ -85,7 +84,7 @@ router.get("/", async (req: Request, res) => {
       }),
     ]);
 
-    const items = products.map((p) => ({
+    const items = products.map((p: typeof products[number]) => ({
       id: p.id,
       name: p.name,
       slug: p.slug,
@@ -120,7 +119,7 @@ router.get("/:id", async (req: Request, res) => {
   try {
     const product = await prisma.product.findFirst({
       where: {
-        OR: [{ id: req.params.id }, { slug: req.params.id }],
+        OR: [{ id: req.params.id as string }, { slug: req.params.id as string }],
         isActive: true,
       },
       include: { brand: { select: { id: true, name: true, logo: true } } },
@@ -163,7 +162,7 @@ import { recommendSize } from "../lib/sizeRecommender";
 
 router.get("/:id/size-recommendation", verifyJwt, async (req: AuthRequest, res) => {
   try {
-    const recommendation = await recommendSize(req.userId!, req.params.id);
+    const recommendation = await recommendSize(req.userId!, req.params.id as string);
     if (!recommendation) {
       return res.status(404).json({
         error: "Unable to generate size recommendation. Please complete your body profile first.",

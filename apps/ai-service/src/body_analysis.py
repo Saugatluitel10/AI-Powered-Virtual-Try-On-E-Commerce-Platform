@@ -98,8 +98,8 @@ def _extract_landmarks(image_bytes: bytes) -> tuple[list, int, int, float] | Non
 
 def _estimate_height_cm(lm: list, w_px: int, h_px: int) -> float:
     def pt(name: str) -> tuple[float, float]:
-        l = lm[_IDX[name]]
-        return l.x * w_px, l.y * h_px
+        landmark = lm[_IDX[name]]
+        return landmark.x * w_px, landmark.y * h_px
 
     nose = pt("nose")
     l_shoulder, r_shoulder = pt("l_shoulder"), pt("r_shoulder")
@@ -128,8 +128,8 @@ def _estimate_height_cm(lm: list, w_px: int, h_px: int) -> float:
 
 def _estimate_measurements(lm: list, w_px: int, h_px: int, height_cm: float) -> Measurements:
     def pt(name: str) -> tuple[float, float]:
-        l = lm[_IDX[name]]
-        return l.x * w_px, l.y * h_px
+        landmark = lm[_IDX[name]]
+        return landmark.x * w_px, landmark.y * h_px
 
     l_shoulder, r_shoulder = pt("l_shoulder"), pt("r_shoulder")
     l_hip, r_hip = pt("l_hip"), pt("r_hip")

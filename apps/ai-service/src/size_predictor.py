@@ -3,7 +3,6 @@ Size prediction model — maps body measurements to brand-specific sizes.
 Uses scikit-learn trained on brand size charts.
 """
 import os
-import json
 import numpy as np
 from typing import Literal
 

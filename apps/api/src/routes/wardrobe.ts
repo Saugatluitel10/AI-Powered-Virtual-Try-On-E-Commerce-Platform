@@ -52,7 +52,7 @@ router.get("/", verifyJwt, async (req: AuthRequest, res) => {
     });
 
     const data = await Promise.all(
-      items.map(async (item) => {
+      items.map(async (item: typeof items[number]) => {
         let tryOnImageUrl: string | null = null;
         if (item.tryOnResultId) {
           const result = await prisma.tryOnResult.findUnique({
@@ -160,7 +160,7 @@ router.post("/", verifyJwt, async (req: AuthRequest, res) => {
 router.delete("/:id", verifyJwt, async (req: AuthRequest, res) => {
   try {
     const item = await prisma.wardrobeItem.findFirst({
-      where: { id: req.params.id, userId: req.userId! },
+      where: { id: req.params.id as string, userId: req.userId! },
     });
     if (!item) {
       return res.status(404).json({ error: "Wardrobe item not found." });
@@ -180,7 +180,7 @@ router.patch("/:id/move", verifyJwt, async (req: AuthRequest, res) => {
     const { collectionId } = req.body as { collectionId: string | null };
 
     const item = await prisma.wardrobeItem.findFirst({
-      where: { id: req.params.id, userId: req.userId! },
+      where: { id: req.params.id as string, userId: req.userId! },
     });
     if (!item) {
       return res.status(404).json({ error: "Wardrobe item not found." });
@@ -223,7 +223,7 @@ router.get("/collections", verifyJwt, async (req: AuthRequest, res) => {
     });
 
     return res.json({
-      data: collections.map((c) => ({
+      data: collections.map((c: typeof collections[number]) => ({
         id: c.id,
         name: c.name,
         isPublic: c.isPublic,
@@ -273,7 +273,7 @@ router.post("/collections", verifyJwt, async (req: AuthRequest, res) => {
 router.delete("/collections/:id", verifyJwt, async (req: AuthRequest, res) => {
   try {
     const collection = await prisma.wardrobeCollection.findFirst({
-      where: { id: req.params.id, userId: req.userId! },
+      where: { id: req.params.id as string, userId: req.userId! },
     });
     if (!collection) {
       return res.status(404).json({ error: "Collection not found." });
@@ -297,7 +297,7 @@ router.delete("/collections/:id", verifyJwt, async (req: AuthRequest, res) => {
 router.post("/collections/:id/share", verifyJwt, async (req: AuthRequest, res) => {
   try {
     const collection = await prisma.wardrobeCollection.findFirst({
-      where: { id: req.params.id, userId: req.userId! },
+      where: { id: req.params.id as string, userId: req.userId! },
     });
     if (!collection) {
       return res.status(404).json({ error: "Collection not found." });
@@ -326,7 +326,7 @@ router.post("/collections/:id/share", verifyJwt, async (req: AuthRequest, res) =
 router.get("/shared/:token", async (req: Request, res) => {
   try {
     const collection = await prisma.wardrobeCollection.findUnique({
-      where: { shareToken: req.params.token },
+      where: { shareToken: req.params.token as string },
       include: {
         user: { select: { name: true } },
         items: {
@@ -354,7 +354,7 @@ router.get("/shared/:token", async (req: Request, res) => {
     }
 
     const items = await Promise.all(
-      collection.items.map(async (item) => {
+      collection.items.map(async (item: typeof collection.items[number]) => {
         let tryOnImageUrl: string | null = null;
         if (item.tryOnResultId) {
           const result = await prisma.tryOnResult.findUnique({
@@ -397,7 +397,7 @@ router.get("/shared/:token", async (req: Request, res) => {
 router.get("/:id/complete-the-look", verifyJwt, async (req: AuthRequest, res) => {
   try {
     const item = await prisma.wardrobeItem.findFirst({
-      where: { id: req.params.id, userId: req.userId! },
+      where: { id: req.params.id as string, userId: req.userId! },
       include: {
         product: {
           select: {
@@ -444,7 +444,7 @@ router.get("/:id/complete-the-look", verifyJwt, async (req: AuthRequest, res) =>
     });
 
     return res.json({
-      data: suggestions.map((p) => ({
+      data: suggestions.map((p: typeof suggestions[number]) => ({
         id: p.id,
         name: p.name,
         slug: p.slug,

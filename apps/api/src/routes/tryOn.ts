@@ -119,7 +119,7 @@ router.get("/history", verifyJwt, async (req: AuthRequest, res) => {
     ]);
 
     const items = await Promise.all(
-      results.map(async (r) => {
+      results.map(async (r: typeof results[number]) => {
         let resultImageUrl: string | null = null;
         if (r.resultImageUrl) {
           try {
@@ -169,7 +169,7 @@ router.get("/history", verifyJwt, async (req: AuthRequest, res) => {
 router.get("/:id", verifyJwt, async (req: AuthRequest, res) => {
   try {
     const result = await prisma.tryOnResult.findFirst({
-      where: { id: req.params.id, userId: req.userId! },
+      where: { id: req.params.id as string, userId: req.userId! },
       include: {
         product: { select: { id: true, name: true, slug: true, images: true } },
       },

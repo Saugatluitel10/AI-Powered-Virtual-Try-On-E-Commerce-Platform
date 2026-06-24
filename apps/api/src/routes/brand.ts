@@ -31,15 +31,15 @@ router.get("/dashboard", async (req: AuthRequest, res) => {
     ]);
 
     const completedOrders = orderItems.filter(
-      (oi) => !["cancelled", "refunded"].includes(oi.order.status)
+      (oi: typeof orderItems[number]) => !["cancelled", "refunded"].includes(oi.order.status)
     );
-    const totalRevenue = completedOrders.reduce(
-      (sum, oi) => sum + oi.priceAtTime * oi.quantity,
-      0
-    );
-    const totalOrders = new Set(completedOrders.map((oi) => oi.orderId)).size;
+    let totalRevenue = 0;
+    for (const oi of completedOrders) {
+      totalRevenue += oi.priceAtTime * oi.quantity;
+    }
+    const totalOrders = new Set(completedOrders.map((oi: typeof completedOrders[number]) => oi.orderId)).size;
 
-    const topProductIds = topProducts.map((tp) => tp.productId);
+    const topProductIds = topProducts.map((tp: typeof topProducts[number]) => tp.productId);
     const topProductDetails = topProductIds.length > 0
       ? await prisma.product.findMany({
           where: { id: { in: topProductIds } },
@@ -94,7 +94,7 @@ router.get("/products", async (req: AuthRequest, res) => {
 
     return res.json({
       data: {
-        items: products.map((p) => ({
+        items: products.map((p: typeof products[number]) => ({
           id: p.id,
           name: p.name,
           slug: p.slug,
@@ -219,7 +219,7 @@ router.post("/products/bulk", async (req: AuthRequest, res) => {
 router.patch("/products/:id", async (req: AuthRequest, res) => {
   try {
     const existing = await prisma.product.findFirst({
-      where: { id: req.params.id, brandId: req.brandId! },
+      where: { id: req.params.id as string, brandId: req.brandId! },
     });
     if (!existing) {
       return res.status(404).json({ error: "Product not found." });
@@ -275,7 +275,7 @@ router.get("/sales", async (req: AuthRequest, res) => {
 
     return res.json({
       data: {
-        items: items.map((oi) => ({
+        items: items.map((oi: typeof items[number]) => ({
           orderItemId: oi.id,
           orderId: oi.order.id,
           orderStatus: oi.order.status,
@@ -321,10 +321,10 @@ router.get("/commission", async (req: AuthRequest, res) => {
       include: { order: { select: { currency: true, createdAt: true } } },
     });
 
-    const totalRevenue = orderItems.reduce(
-      (sum, oi) => sum + oi.priceAtTime * oi.quantity,
-      0
-    );
+    let totalRevenue = 0;
+    for (const oi of orderItems) {
+      totalRevenue += oi.priceAtTime * oi.quantity;
+    }
     const commissionAmount = totalRevenue * brand.commissionRate;
     const payoutAmount = totalRevenue - commissionAmount;
 

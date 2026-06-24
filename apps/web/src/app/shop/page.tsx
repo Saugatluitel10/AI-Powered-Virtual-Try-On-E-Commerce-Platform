@@ -353,7 +353,7 @@ export default function ShopPage() {
         {/* Sort */}
         <Select
           value={filters.sort}
-          onValueChange={(v) => changeFilter("sort", v)}
+          onValueChange={(v) => changeFilter("sort", v ?? "newest")}
         >
           <SelectTrigger className="w-44">
             <SelectValue placeholder="Sort by" />
@@ -367,7 +367,7 @@ export default function ShopPage() {
 
         {/* Mobile filter trigger */}
         <Sheet>
-          <SheetTrigger asChild>
+          <SheetTrigger>
             <Button variant="outline" className="lg:hidden relative">
               <SlidersHorizontal className="h-4 w-4 mr-2" />
               Filters

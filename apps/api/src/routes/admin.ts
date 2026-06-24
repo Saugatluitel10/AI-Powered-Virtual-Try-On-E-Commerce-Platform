@@ -70,7 +70,7 @@ router.get("/dashboard", async (_req: AuthRequest, res) => {
         tryOnSessionsTotal,
         conversionRate: parseFloat(conversionRate),
         activeCartItems: cartAddCount,
-        recentOrders: recentOrders.map((o) => ({
+        recentOrders: recentOrders.map((o: typeof recentOrders[number]) => ({
           id: o.id,
           status: o.status,
           totalAmount: o.totalAmount,
@@ -79,7 +79,7 @@ router.get("/dashboard", async (_req: AuthRequest, res) => {
           itemCount: o._count.items,
           createdAt: o.createdAt.toISOString(),
         })),
-        ordersByStatus: recentOrderStats.map((s) => ({
+        ordersByStatus: recentOrderStats.map((s: typeof recentOrderStats[number]) => ({
           status: s.status,
           count: s._count,
         })),

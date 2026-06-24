@@ -25,7 +25,7 @@ router.get("/", verifyJwt, async (req: AuthRequest, res) => {
       orderBy: { addedAt: "desc" },
     });
 
-    const cartItems = items.map((ci) => ({
+    const cartItems = items.map((ci: typeof items[number]) => ({
       id: ci.id,
       productId: ci.product.id,
       productName: ci.product.name,
@@ -39,13 +39,13 @@ router.get("/", verifyJwt, async (req: AuthRequest, res) => {
       addedAt: ci.addedAt.toISOString(),
     }));
 
-    const subtotal = cartItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
+    const subtotal = cartItems.reduce((sum: number, i: typeof cartItems[number]) => sum + i.unitPrice * i.quantity, 0);
 
     return res.json({
       data: {
         items: cartItems,
         subtotal,
-        itemCount: cartItems.reduce((sum, i) => sum + i.quantity, 0),
+        itemCount: cartItems.reduce((sum: number, i: typeof cartItems[number]) => sum + i.quantity, 0),
       },
     });
   } catch (err) {
@@ -111,7 +111,7 @@ router.patch("/:id", verifyJwt, async (req: AuthRequest, res) => {
     }
 
     const item = await prisma.cartItem.findFirst({
-      where: { id: req.params.id, userId: req.userId! },
+      where: { id: req.params.id as string, userId: req.userId! },
     });
     if (!item) {
       return res.status(404).json({ error: "Cart item not found." });
@@ -133,7 +133,7 @@ router.patch("/:id", verifyJwt, async (req: AuthRequest, res) => {
 router.delete("/:id", verifyJwt, async (req: AuthRequest, res) => {
   try {
     const item = await prisma.cartItem.findFirst({
-      where: { id: req.params.id, userId: req.userId! },
+      where: { id: req.params.id as string, userId: req.userId! },
     });
     if (!item) {
       return res.status(404).json({ error: "Cart item not found." });

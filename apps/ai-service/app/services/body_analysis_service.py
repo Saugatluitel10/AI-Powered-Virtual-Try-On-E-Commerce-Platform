@@ -128,8 +128,8 @@ def _estimate_height_cm(
     """
 
     def pt(name: str) -> tuple[float, float]:
-        l = lm[_IDX[name]]
-        return l.x * w_px, l.y * h_px
+        landmark = lm[_IDX[name]]
+        return landmark.x * w_px, landmark.y * h_px
 
     nose = pt("nose")
     l_shoulder, r_shoulder = pt("l_shoulder"), pt("r_shoulder")
@@ -142,8 +142,7 @@ def _estimate_height_cm(
     head_height_px = abs(mid_shoulder[1] - nose[1])
 
     # Total height from proportions (7.5 head-heights)
-    if head_height_px > 5:
-        height_from_head = head_height_px * 7.5
+    # head_height_px * 7.5 used in weighted blend below via head_height_px
 
     # Cross-check: shoulder-to-ankle span ≈ 82 % of total height
     shoulder_ankle_px = _dist(mid_shoulder, mid_ankle)
@@ -185,8 +184,8 @@ def _estimate_measurements(
     """
 
     def pt(name: str) -> tuple[float, float]:
-        l = lm[_IDX[name]]
-        return l.x * w_px, l.y * h_px
+        landmark = lm[_IDX[name]]
+        return landmark.x * w_px, landmark.y * h_px
 
     # Key points
     l_shoulder, r_shoulder = pt("l_shoulder"), pt("r_shoulder")
@@ -251,7 +250,6 @@ def _classify_body_type(m: Measurements) -> tuple[BodyTypeLiteral, float]:
 
     sh_ratio = shoulder / hip_w if hip_w > 0 else 1.0   # shoulder / hip width
     wh_ratio = waist_w / hip_w if hip_w > 0 else 1.0    # waist / hip width
-    sw_ratio = shoulder / waist_w if waist_w > 0 else 1.0  # shoulder / waist
 
     # Classification rules (ordered by specificity)
     # Inverted Triangle: shoulders significantly wider than hips

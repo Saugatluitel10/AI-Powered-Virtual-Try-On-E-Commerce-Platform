@@ -43,13 +43,13 @@ router.get("/", verifyJwt, async (req: AuthRequest, res) => {
       }),
     ]);
 
-    const data = orders.map((o) => ({
+    const data = orders.map((o: typeof orders[number]) => ({
       id: o.id,
       status: o.status,
       totalAmount: o.totalAmount,
       currency: o.currency,
       paymentMethod: o.paymentMethod,
-      itemCount: o.items.reduce((sum, i) => sum + i.quantity, 0),
+      itemCount: o.items.reduce((sum: number, i: { quantity: number }) => sum + i.quantity, 0),
       items: mapOrderItems(o.items),
       createdAt: o.createdAt.toISOString(),
     }));
@@ -73,7 +73,7 @@ router.get("/", verifyJwt, async (req: AuthRequest, res) => {
 router.get("/:id", verifyJwt, async (req: AuthRequest, res) => {
   try {
     const order = await prisma.order.findFirst({
-      where: { id: req.params.id, userId: req.userId! },
+      where: { id: req.params.id as string, userId: req.userId! },
       include: {
         items: {
           include: {
@@ -98,7 +98,7 @@ router.get("/:id", verifyJwt, async (req: AuthRequest, res) => {
         paymentRef: order.paymentRef,
         shippingAddress: order.shippingAddress,
         items: mapOrderItems(order.items),
-        returnRequests: order.returnRequests.map((r) => ({
+        returnRequests: order.returnRequests.map((r: { id: string; items: unknown; reason: string; status: string; createdAt: Date }) => ({
           id: r.id,
           items: r.items,
           reason: r.reason,
@@ -120,7 +120,7 @@ router.get("/:id", verifyJwt, async (req: AuthRequest, res) => {
 router.get("/:id/invoice", verifyJwt, async (req: AuthRequest, res) => {
   try {
     const order = await prisma.order.findFirst({
-      where: { id: req.params.id, userId: req.userId! },
+      where: { id: req.params.id as string, userId: req.userId! },
       include: {
         user: { select: { name: true, email: true } },
         items: {
@@ -184,7 +184,7 @@ router.get("/:id/invoice", verifyJwt, async (req: AuthRequest, res) => {
       <tr><th>Item</th><th>Size</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr>
     </thead>
     <tbody>
-      ${order.items.map((item) => `
+      ${order.items.map((item: { product: { name: string }; size: string; quantity: number; priceAtTime: number }) => `
         <tr>
           <td>${item.product.name}</td>
           <td>${item.size}</td>
@@ -292,7 +292,7 @@ router.post("/", verifyJwt, async (req: AuthRequest, res) => {
 router.patch("/:id/cancel", verifyJwt, async (req: AuthRequest, res) => {
   try {
     const order = await prisma.order.findFirst({
-      where: { id: req.params.id, userId: req.userId! },
+      where: { id: req.params.id as string, userId: req.userId! },
       include: { user: { select: { email: true } } },
     });
     if (!order) {
@@ -336,7 +336,7 @@ router.post("/:id/return", verifyJwt, async (req: AuthRequest, res) => {
     }
 
     const order = await prisma.order.findFirst({
-      where: { id: req.params.id, userId: req.userId! },
+      where: { id: req.params.id as string, userId: req.userId! },
       include: {
         items: true,
         user: { select: { email: true } },
@@ -350,7 +350,7 @@ router.post("/:id/return", verifyJwt, async (req: AuthRequest, res) => {
       return res.status(400).json({ error: "Returns are only available for delivered/confirmed/shipped orders." });
     }
 
-    const orderItemIds = new Set(order.items.map((i) => i.id));
+    const orderItemIds = new Set(order.items.map((i: { id: string }) => i.id));
     for (const item of items) {
       if (!orderItemIds.has(item.orderItemId)) {
         return res.status(400).json({ error: `Item ${item.orderItemId} does not belong to this order.` });

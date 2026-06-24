@@ -7,7 +7,6 @@ from app.services.segmentation_service import (
     remove_background,
     segment_garment,
     segment_garment_from_url,
-    segment_garment_base64,
 )
 
 router = APIRouter()
