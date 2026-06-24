@@ -3,7 +3,22 @@ import { verifyJwt, type AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import { enqueueEmail } from "../jobs/queues";
 
+type TransactionClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
 const router = Router();
+
+function mapOrderItems(items: Array<{ id: string; productId: string; size: string; quantity: number; priceAtTime: number; product: { name: string; images: string[]; slug: string } }>) {
+  return items.map((i) => ({
+    id: i.id,
+    productId: i.productId,
+    productName: i.product.name,
+    productImage: i.product.images[0] ?? null,
+    productSlug: i.product.slug,
+    size: i.size,
+    quantity: i.quantity,
+    priceAtTime: i.priceAtTime,
+  }));
+}
 
 // ─── GET /api/v1/orders ──────────────────────────────────────────────────────
 router.get("/", verifyJwt, async (req: AuthRequest, res) => {
@@ -18,9 +33,7 @@ router.get("/", verifyJwt, async (req: AuthRequest, res) => {
         include: {
           items: {
             include: {
-              product: {
-                select: { name: true, images: true, slug: true },
-              },
+              product: { select: { name: true, images: true, slug: true } },
             },
           },
         },
@@ -37,16 +50,7 @@ router.get("/", verifyJwt, async (req: AuthRequest, res) => {
       currency: o.currency,
       paymentMethod: o.paymentMethod,
       itemCount: o.items.reduce((sum, i) => sum + i.quantity, 0),
-      items: o.items.map((i) => ({
-        id: i.id,
-        productId: i.productId,
-        productName: i.product.name,
-        productImage: i.product.images[0] ?? null,
-        productSlug: i.product.slug,
-        size: i.size,
-        quantity: i.quantity,
-        priceAtTime: i.priceAtTime,
-      })),
+      items: mapOrderItems(o.items),
       createdAt: o.createdAt.toISOString(),
     }));
 
@@ -73,11 +77,10 @@ router.get("/:id", verifyJwt, async (req: AuthRequest, res) => {
       include: {
         items: {
           include: {
-            product: {
-              select: { name: true, images: true, slug: true },
-            },
+            product: { select: { name: true, images: true, slug: true } },
           },
         },
+        returnRequests: { orderBy: { createdAt: "desc" } },
       },
     });
 
@@ -94,17 +97,16 @@ router.get("/:id", verifyJwt, async (req: AuthRequest, res) => {
         paymentMethod: order.paymentMethod,
         paymentRef: order.paymentRef,
         shippingAddress: order.shippingAddress,
-        items: order.items.map((i) => ({
-          id: i.id,
-          productId: i.productId,
-          productName: i.product.name,
-          productImage: i.product.images[0] ?? null,
-          productSlug: i.product.slug,
-          size: i.size,
-          quantity: i.quantity,
-          priceAtTime: i.priceAtTime,
+        items: mapOrderItems(order.items),
+        returnRequests: order.returnRequests.map((r) => ({
+          id: r.id,
+          items: r.items,
+          reason: r.reason,
+          status: r.status,
+          createdAt: r.createdAt.toISOString(),
         })),
         createdAt: order.createdAt.toISOString(),
+        updatedAt: order.updatedAt.toISOString(),
       },
     });
   } catch (err) {
@@ -113,8 +115,105 @@ router.get("/:id", verifyJwt, async (req: AuthRequest, res) => {
   }
 });
 
+// ─── GET /api/v1/orders/:id/invoice ──────────────────────────────────────────
+// Returns a simple HTML invoice that can be printed/saved as PDF from the browser
+router.get("/:id/invoice", verifyJwt, async (req: AuthRequest, res) => {
+  try {
+    const order = await prisma.order.findFirst({
+      where: { id: req.params.id, userId: req.userId! },
+      include: {
+        user: { select: { name: true, email: true } },
+        items: {
+          include: {
+            product: { select: { name: true, slug: true } },
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    const addr = (order.shippingAddress ?? {}) as Record<string, string>;
+    const fmtCurrency = (amount: number) =>
+      order.currency === "NPR" ? `Rs. ${amount.toLocaleString()}` : `${order.currency} ${amount.toFixed(2)}`;
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Invoice #${order.id.slice(0, 8).toUpperCase()}</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px; color: #1a1a1a; }
+  h1 { font-size: 28px; margin-bottom: 4px; }
+  .meta { color: #666; font-size: 14px; margin-bottom: 32px; }
+  table { width: 100%; border-collapse: collapse; margin: 24px 0; }
+  th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e5e5; }
+  th { background: #f9f9f9; font-weight: 600; font-size: 13px; text-transform: uppercase; color: #666; }
+  .total-row td { font-weight: 700; font-size: 16px; border-top: 2px solid #1a1a1a; }
+  .address { margin: 16px 0; line-height: 1.6; }
+  .footer { margin-top: 48px; font-size: 12px; color: #999; text-align: center; }
+  @media print { body { padding: 0; } .no-print { display: none; } }
+</style>
+</head>
+<body>
+  <h1>VTryon Invoice</h1>
+  <p class="meta">Invoice #${order.id.slice(0, 8).toUpperCase()} &middot; ${new Date(order.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
+
+  <div style="display: flex; justify-content: space-between;">
+    <div>
+      <strong>Bill To</strong>
+      <div class="address">
+        ${order.user.name ?? "Customer"}<br>
+        ${order.user.email}<br>
+        ${addr.street ? `${addr.street}<br>` : ""}
+        ${addr.city ? `${addr.city}, ${addr.state ?? ""} ${addr.zip ?? ""}` : ""}
+      </div>
+    </div>
+    <div style="text-align: right;">
+      <strong>Payment</strong>
+      <div class="address">
+        Method: ${order.paymentMethod ?? "N/A"}<br>
+        Status: ${order.status}<br>
+        ${order.paymentRef ? `Ref: ${order.paymentRef}` : ""}
+      </div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Item</th><th>Size</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr>
+    </thead>
+    <tbody>
+      ${order.items.map((item) => `
+        <tr>
+          <td>${item.product.name}</td>
+          <td>${item.size}</td>
+          <td>${item.quantity}</td>
+          <td>${fmtCurrency(item.priceAtTime)}</td>
+          <td>${fmtCurrency(item.priceAtTime * item.quantity)}</td>
+        </tr>
+      `).join("")}
+      <tr class="total-row">
+        <td colspan="4">Total</td>
+        <td>${fmtCurrency(order.totalAmount)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="footer">VTryon &mdash; AI-Powered Virtual Try-On Platform</p>
+  <button class="no-print" onclick="window.print()" style="margin-top:16px;padding:8px 24px;cursor:pointer;background:#7c3aed;color:white;border:none;border-radius:6px;font-size:14px;">Download PDF</button>
+</body>
+</html>`;
+
+    res.setHeader("Content-Type", "text/html");
+    return res.send(html);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error generating invoice";
+    return res.status(500).json({ error: message });
+  }
+});
+
 // ─── POST /api/v1/orders ─────────────────────────────────────────────────────
-// Creates a pending order from the user's cart
 router.post("/", verifyJwt, async (req: AuthRequest, res) => {
   try {
     const { shippingAddress, paymentMethod } = req.body as {
@@ -129,7 +228,6 @@ router.post("/", verifyJwt, async (req: AuthRequest, res) => {
       return res.status(400).json({ error: "paymentMethod is required." });
     }
 
-    // Fetch cart
     const cartItems = await prisma.cartItem.findMany({
       where: { userId: req.userId! },
       include: {
@@ -141,14 +239,20 @@ router.post("/", verifyJwt, async (req: AuthRequest, res) => {
       return res.status(400).json({ error: "Cart is empty." });
     }
 
-    const totalAmount = cartItems.reduce(
-      (sum, ci) => sum + ci.product.price * ci.quantity,
-      0
-    );
+    let totalAmount = 0;
+    for (const ci of cartItems) {
+      totalAmount += ci.product.price * ci.quantity;
+    }
     const currency = cartItems[0].product.currency;
 
-    // Create order + items in a transaction, then clear cart
-    const order = await prisma.$transaction(async (tx) => {
+    const orderItemsData = cartItems.map((ci: typeof cartItems[number]) => ({
+      productId: ci.product.id,
+      size: ci.size,
+      quantity: ci.quantity,
+      priceAtTime: ci.product.price,
+    }));
+
+    const order = await prisma.$transaction(async (tx: TransactionClient) => {
       const created = await tx.order.create({
         data: {
           userId: req.userId!,
@@ -157,14 +261,7 @@ router.post("/", verifyJwt, async (req: AuthRequest, res) => {
           currency,
           paymentMethod,
           shippingAddress: shippingAddress as Record<string, string>,
-          items: {
-            create: cartItems.map((ci) => ({
-              productId: ci.product.id,
-              size: ci.size,
-              quantity: ci.quantity,
-              priceAtTime: ci.product.price,
-            })),
-          },
+          items: { create: orderItemsData },
         },
         include: { items: true },
       });
@@ -196,6 +293,7 @@ router.patch("/:id/cancel", verifyJwt, async (req: AuthRequest, res) => {
   try {
     const order = await prisma.order.findFirst({
       where: { id: req.params.id, userId: req.userId! },
+      include: { user: { select: { email: true } } },
     });
     if (!order) {
       return res.status(404).json({ error: "Order not found." });
@@ -209,9 +307,84 @@ router.patch("/:id/cancel", verifyJwt, async (req: AuthRequest, res) => {
       data: { status: "cancelled" },
     });
 
+    await enqueueEmail({
+      type: "order_status_update",
+      to: order.user.email,
+      payload: { orderId: order.id, status: "cancelled" },
+    });
+
     return res.json({ data: { id: updated.id, status: updated.status } });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error cancelling order";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── POST /api/v1/orders/:id/return ──────────────────────────────────────────
+router.post("/:id/return", verifyJwt, async (req: AuthRequest, res) => {
+  try {
+    const { items, reason } = req.body as {
+      items: Array<{ orderItemId: string; quantity: number }>;
+      reason: string;
+    };
+
+    if (!items?.length) {
+      return res.status(400).json({ error: "Select at least one item to return." });
+    }
+    if (!reason?.trim()) {
+      return res.status(400).json({ error: "Reason is required." });
+    }
+
+    const order = await prisma.order.findFirst({
+      where: { id: req.params.id, userId: req.userId! },
+      include: {
+        items: true,
+        user: { select: { email: true } },
+      },
+    });
+
+    if (!order) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+    if (!["delivered", "confirmed", "shipped"].includes(order.status)) {
+      return res.status(400).json({ error: "Returns are only available for delivered/confirmed/shipped orders." });
+    }
+
+    const orderItemIds = new Set(order.items.map((i) => i.id));
+    for (const item of items) {
+      if (!orderItemIds.has(item.orderItemId)) {
+        return res.status(400).json({ error: `Item ${item.orderItemId} does not belong to this order.` });
+      }
+    }
+
+    const returnRequest = await prisma.returnRequest.create({
+      data: {
+        orderId: order.id,
+        userId: req.userId!,
+        items: items,
+        reason: reason.trim(),
+        status: "pending",
+      },
+    });
+
+    await enqueueEmail({
+      type: "return_request_update",
+      to: order.user.email,
+      payload: { orderId: order.id, status: "submitted" },
+    });
+
+    return res.status(201).json({
+      data: {
+        id: returnRequest.id,
+        orderId: returnRequest.orderId,
+        items: returnRequest.items,
+        reason: returnRequest.reason,
+        status: returnRequest.status,
+        createdAt: returnRequest.createdAt.toISOString(),
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error creating return request";
     return res.status(500).json({ error: message });
   }
 });

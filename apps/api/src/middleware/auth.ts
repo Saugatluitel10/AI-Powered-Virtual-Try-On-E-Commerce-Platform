@@ -4,6 +4,8 @@ import { prisma } from "../lib/prisma";
 
 export interface AuthRequest extends Request {
   userId?: string;
+  userRole?: string;
+  brandId?: string;
 }
 
 export async function verifyJwt(
@@ -25,7 +27,7 @@ export async function verifyJwt(
 
   const user = await prisma.user.findUnique({
     where: { supabaseId: data.user.id },
-    select: { id: true },
+    select: { id: true, role: true, brandId: true },
   });
 
   if (!user) {
@@ -33,5 +35,16 @@ export async function verifyJwt(
   }
 
   req.userId = user.id;
+  req.userRole = user.role;
+  req.brandId = user.brandId ?? undefined;
   return next();
+}
+
+export function requireRole(...roles: string[]) {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.userRole || !roles.includes(req.userRole)) {
+      return res.status(403).json({ error: "Insufficient permissions" });
+    }
+    return next();
+  };
 }

@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import api from "@/lib/api";
+import { trackEvent } from "@/lib/posthog";
 
 export interface LocalCartItem {
   productId: string;
@@ -54,6 +55,7 @@ export const useCartStore = create<CartState>()(
 
       // ── Local cart (guest users) ───────────────────────────────────────
       addItem: (item) => {
+        trackEvent("add_to_cart", { productId: item.productId, size: item.size, price: item.unitPrice, currency: item.currency });
         set((state) => {
           const existing = state.items.find(
             (i) => i.productId === item.productId && i.size === item.size

@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import api from "@/lib/api";
+import { trackEvent } from "@/lib/posthog";
 import { formatCurrency } from "@/lib/utils";
 
 interface OrderDetail {
@@ -52,7 +53,16 @@ export default function OrderConfirmationPage() {
 
     api
       .get<{ data: OrderDetail }>(`/orders/${orderId}`)
-      .then((res) => setOrder(res.data.data))
+      .then((res) => {
+        setOrder(res.data.data);
+        trackEvent("purchase_complete", {
+          orderId: res.data.data.id,
+          totalAmount: res.data.data.totalAmount,
+          currency: res.data.data.currency,
+          paymentMethod: res.data.data.paymentMethod,
+          itemCount: res.data.data.items.length,
+        });
+      })
       .catch(() => setError("Could not load order details."))
       .finally(() => setLoading(false));
   }, [orderId]);

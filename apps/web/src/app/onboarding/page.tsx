@@ -6,6 +6,7 @@ import { Check, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import api from "@/lib/api";
+import { trackEvent } from "@/lib/posthog";
 
 const STEPS = [
   {
@@ -77,6 +78,7 @@ export default function OnboardingPage() {
     setSaving(true);
     try {
       await api.put("/users/me/style-profile", selections);
+      trackEvent("style_quiz_completed", selections);
       router.push("/shop");
     } catch {
       setSaving(false);

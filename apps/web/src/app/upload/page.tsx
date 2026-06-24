@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { CheckCircle2, Camera, Upload, ChevronRight, AlertCircle, RotateCcw } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { trackEvent } from "@/lib/posthog";
 import api from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -186,6 +187,7 @@ export default function UploadPage() {
         },
       });
       setProgress(100);
+      trackEvent("photo_uploaded", { jobId: data.data.jobId });
       setTimeout(() => router.push(`/analysis?jobId=${data.data.jobId}`), 700);
     } catch (err: unknown) {
       const message =

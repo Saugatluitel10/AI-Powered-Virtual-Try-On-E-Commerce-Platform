@@ -1,8 +1,9 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
-import { initPostHog } from "@/lib/posthog";
+import { useState, useEffect, Suspense } from "react";
+import { initPostHog, identifyUser, resetUser } from "@/lib/posthog";
+import { PostHogProvider } from "@/components/providers/PostHogProvider";
 import { createClient } from "@/lib/supabase";
 import { useAuthStore } from "@/store/authStore";
 
@@ -35,12 +36,21 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setAuth(session?.user ?? null, session);
+      if (session?.user) {
+        identifyUser(session.user.id, { email: session.user.email });
+      } else {
+        resetUser();
+      }
     });
 
     return () => subscription.unsubscribe();
   }, [setAuth, setLoading]);
 
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <Suspense fallback={null}>
+        <PostHogProvider>{children}</PostHogProvider>
+      </Suspense>
+    </QueryClientProvider>
   );
 }

@@ -2,7 +2,7 @@ import { Worker } from "bullmq";
 import { BodyType } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { uploadTryonResult, getSignedUrl, BUCKETS } from "../lib/supabase";
-import { sendOrderConfirmation } from "../lib/resend";
+import { sendOrderConfirmation, sendOrderStatusUpdate, sendReturnRequestUpdate } from "../lib/resend";
 import type { TryOnJobData, EmailJobData, BodyAnalysisJobData } from "./queues";
 
 const connection = { url: process.env.REDIS_URL ?? "redis://localhost:6379" };
@@ -173,6 +173,18 @@ export const emailWorker = new Worker<EmailJobData>(
         payload.orderId as string,
         payload.total as number,
         payload.currency as string
+      );
+    } else if (type === "order_status_update") {
+      await sendOrderStatusUpdate(
+        to,
+        payload.orderId as string,
+        payload.status as string
+      );
+    } else if (type === "return_request_update") {
+      await sendReturnRequestUpdate(
+        to,
+        payload.orderId as string,
+        payload.status as string
       );
     }
   },

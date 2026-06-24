@@ -1,18 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import {
   Package,
   Loader2,
-  ShoppingBag,
-  ChevronDown,
-  ChevronUp,
+  ChevronRight,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import api from "@/lib/api";
 import { formatCurrency, formatDate, getStatusColor } from "@/lib/utils";
 
@@ -41,7 +40,7 @@ interface OrderData {
 export default function OrdersPage() {
   const [orders, setOrders] = useState<OrderData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     api
@@ -50,6 +49,13 @@ export default function OrdersPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  const filtered = orders.filter((o) =>
+    search
+      ? o.id.toLowerCase().includes(search.toLowerCase()) ||
+        o.items.some((i) => i.productName.toLowerCase().includes(search.toLowerCase()))
+      : true
+  );
 
   if (loading) {
     return (
@@ -61,122 +67,64 @@ export default function OrdersPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-3xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">My Orders</h1>
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">My Orders</h1>
+          {orders.length > 0 && (
+            <div className="relative w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                placeholder="Search orders..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+          )}
+        </div>
 
         {orders.length === 0 ? (
           <div className="text-center py-20">
             <Package className="w-16 h-16 text-gray-200 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              No orders yet
-            </h2>
-            <p className="text-gray-500 mb-6">
-              When you place an order, it will appear here.
-            </p>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">No orders yet</h2>
+            <p className="text-gray-500 mb-6">When you place an order, it will appear here.</p>
             <Link href="/shop">
-              <Button className="bg-purple-600 hover:bg-purple-700">
-                Start Shopping
-              </Button>
+              <Button className="bg-purple-600 hover:bg-purple-700">Start Shopping</Button>
             </Link>
           </div>
         ) : (
-          <div className="space-y-4">
-            {orders.map((order) => {
-              const isExpanded = expandedOrder === order.id;
-              return (
-                <Card key={order.id}>
-                  <CardContent className="p-0">
-                    {/* Order header */}
-                    <button
-                      onClick={() =>
-                        setExpandedOrder(isExpanded ? null : order.id)
-                      }
-                      className="w-full p-4 flex items-center justify-between text-left"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                          <Package className="w-5 h-5 text-purple-600" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-900">
-                            #{order.id.slice(0, 8).toUpperCase()}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {formatDate(order.createdAt)} &middot;{" "}
-                            {order.itemCount}{" "}
-                            {order.itemCount === 1 ? "item" : "items"}
-                          </p>
-                        </div>
+          <div className="space-y-3">
+            {filtered.map((order) => (
+              <Link key={order.id} href={`/orders/${order.id}`}>
+                <Card className="hover:shadow-md transition-shadow cursor-pointer">
+                  <CardContent className="p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <Package className="w-5 h-5 text-purple-600" />
                       </div>
-                      <div className="flex items-center gap-3">
-                        <div className="text-right">
-                          <Badge className={getStatusColor(order.status)}>
-                            {order.status}
-                          </Badge>
-                          <p className="text-sm font-semibold text-gray-900 mt-1">
-                            {formatCurrency(order.totalAmount, order.currency)}
-                          </p>
-                        </div>
-                        {isExpanded ? (
-                          <ChevronUp className="w-4 h-4 text-gray-400" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4 text-gray-400" />
-                        )}
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          #{order.id.slice(0, 8).toUpperCase()}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {formatDate(order.createdAt)} &middot; {order.itemCount}{" "}
+                          {order.itemCount === 1 ? "item" : "items"}
+                        </p>
                       </div>
-                    </button>
-
-                    {/* Expanded items */}
-                    {isExpanded && (
-                      <div className="border-t px-4 pb-4 pt-3 space-y-3">
-                        {order.paymentMethod && (
-                          <p className="text-xs text-gray-500">
-                            Paid via{" "}
-                            <span className="font-medium capitalize">
-                              {order.paymentMethod}
-                            </span>
-                          </p>
-                        )}
-                        {order.items.map((item) => (
-                          <div key={item.id} className="flex items-center gap-3">
-                            <div className="relative w-12 h-12 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
-                              {item.productImage ? (
-                                <Image
-                                  src={item.productImage}
-                                  alt={item.productName}
-                                  fill
-                                  className="object-cover"
-                                />
-                              ) : (
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                  <ShoppingBag className="w-4 h-4 text-gray-300" />
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <Link
-                                href={`/shop/${item.productSlug}`}
-                                className="text-sm font-medium text-gray-900 hover:text-purple-600 line-clamp-1"
-                              >
-                                {item.productName}
-                              </Link>
-                              <p className="text-xs text-gray-500">
-                                Size: {item.size} &times; {item.quantity}
-                              </p>
-                            </div>
-                            <p className="text-sm font-medium text-gray-900">
-                              {formatCurrency(
-                                item.priceAtTime * item.quantity,
-                                order.currency
-                              )}
-                            </p>
-                          </div>
-                        ))}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
+                        <p className="text-sm font-semibold text-gray-900 mt-1">
+                          {formatCurrency(order.totalAmount, order.currency)}
+                        </p>
                       </div>
-                    )}
+                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                    </div>
                   </CardContent>
                 </Card>
-              );
-            })}
+              </Link>
+            ))}
           </div>
         )}
       </div>

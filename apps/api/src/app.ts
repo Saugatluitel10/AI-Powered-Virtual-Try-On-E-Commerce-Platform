@@ -10,6 +10,7 @@ import paymentRoutes from "./routes/payments";
 import tryOnRoutes from "./routes/tryOn";
 import recommendationRoutes from "./routes/recommendations";
 import wardrobeRoutes from "./routes/wardrobe";
+import brandRoutes from "./routes/brand";
 import adminRoutes from "./routes/admin";
 
 const app = express();
@@ -43,6 +44,7 @@ app.use(`${v1}/payments`, paymentRoutes);
 app.use(`${v1}/try-on`, tryOnRoutes);
 app.use(`${v1}/recommendations`, recommendationRoutes);
 app.use(`${v1}/wardrobe`, wardrobeRoutes);
+app.use(`${v1}/brand`, brandRoutes);
 app.use(`${v1}/admin`, adminRoutes);
 
 // ─── 404 ──────────────────────────────────────────────────────────────────────

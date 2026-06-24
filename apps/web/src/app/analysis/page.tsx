@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, RotateCcw } from "lucide-react";
 import api from "@/lib/api";
+import { trackEvent } from "@/lib/posthog";
 import type { BodyProfile } from "@/types/body";
 import { useBodyProfileStore } from "@/store/bodyProfileStore";
 import BodyAnalysisCard from "@/components/body-analysis/BodyAnalysisCard";
@@ -84,6 +85,7 @@ export default function AnalysisPage() {
   useEffect(() => {
     if (profile?.analysisComplete) {
       setProfile(profile);
+      trackEvent("analysis_complete", { bodyType: profile.bodyType });
     }
   }, [profile, setProfile]);
 
