@@ -1,4 +1,5 @@
 import express, { type Request, type Response, type NextFunction } from "express";
+import compression from "compression";
 import cors from "cors";
 
 import authRoutes from "./routes/auth";
@@ -14,6 +15,9 @@ import brandRoutes from "./routes/brand";
 import adminRoutes from "./routes/admin";
 
 const app = express();
+
+// ─── Gzip compression ────────────────────────────────────────────────────────
+app.use(compression());
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 app.use(

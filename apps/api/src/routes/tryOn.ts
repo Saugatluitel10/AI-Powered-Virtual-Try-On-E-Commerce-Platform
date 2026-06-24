@@ -3,6 +3,7 @@ import { verifyJwt, type AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import { getSignedUrl, BUCKETS } from "../lib/supabase";
 import { enqueueTryOn } from "../jobs/queues";
+import { redis } from "../lib/redis";
 
 const router = Router();
 
@@ -168,6 +169,13 @@ router.get("/history", verifyJwt, async (req: AuthRequest, res) => {
 // Poll status of a specific try-on result.
 router.get("/:id", verifyJwt, async (req: AuthRequest, res) => {
   try {
+    const cacheKey = `tryon:result:${req.params.id as string}`;
+    const cached = await redis.get(cacheKey).catch(() => null);
+    if (cached) {
+      res.setHeader("X-Cache", "HIT");
+      return res.json(JSON.parse(cached));
+    }
+
     const result = await prisma.tryOnResult.findFirst({
       where: { id: req.params.id as string, userId: req.userId! },
       include: {
@@ -192,7 +200,7 @@ router.get("/:id", verifyJwt, async (req: AuthRequest, res) => {
       }
     }
 
-    return res.json({
+    const body = {
       data: {
         id: result.id,
         productId: result.productId,
@@ -206,7 +214,15 @@ router.get("/:id", verifyJwt, async (req: AuthRequest, res) => {
         errorMessage: result.errorMessage,
         createdAt: result.createdAt.toISOString(),
       },
-    });
+    };
+
+    // Cache permanently once completed (signed URL refreshes on miss)
+    if (result.status === "completed" || result.status === "failed") {
+      redis.set(cacheKey, JSON.stringify(body)).catch(() => {});
+    }
+
+    res.setHeader("X-Cache", "MISS");
+    return res.json(body);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to fetch try-on result";
     return res.status(500).json({ error: message });

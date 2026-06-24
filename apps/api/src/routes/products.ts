@@ -1,12 +1,13 @@
 import { Router, type Request } from "express";
 import { prisma } from "../lib/prisma";
+import { cacheResponse } from "../middleware/cache";
 
 const router = Router();
 
 // ─── GET /api/v1/products ─────────────────────────────────────────────────────
 // Query params: q, category, garmentType, gender, minPrice, maxPrice,
 //               size, bodyType, isTryonEnabled, sort, page, pageSize
-router.get("/", async (req: Request, res) => {
+router.get("/", cacheResponse(300, "products"), async (req: Request, res) => {
   try {
     const {
       q,
@@ -115,7 +116,7 @@ router.get("/", async (req: Request, res) => {
 });
 
 // ─── GET /api/v1/products/:id ─────────────────────────────────────────────────
-router.get("/:id", async (req: Request, res) => {
+router.get("/:id", cacheResponse(300, "products"), async (req: Request, res) => {
   try {
     const product = await prisma.product.findFirst({
       where: {

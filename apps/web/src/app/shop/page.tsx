@@ -426,11 +426,12 @@ export default function ShopPage() {
           {/* Grid */}
           {allProducts.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {allProducts.map((product) => (
+              {allProducts.map((product, idx) => (
                 <ProductCard
                   key={product.id}
                   product={product}
                   highlightBodyType={profile?.bodyType ?? null}
+                  priority={idx < 6}
                 />
               ))}
             </div>

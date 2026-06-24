@@ -18,9 +18,10 @@ const BODY_TYPE_LABELS: Record<string, string> = {
 interface Props {
   product: ProductListItem;
   highlightBodyType?: string | null;
+  priority?: boolean;
 }
 
-export default function ProductCard({ product, highlightBodyType }: Props) {
+export default function ProductCard({ product, highlightBodyType, priority = false }: Props) {
   const isCompatible =
     highlightBodyType &&
     product.suitableBodyTypes.includes(highlightBodyType.toUpperCase());
@@ -39,6 +40,8 @@ export default function ProductCard({ product, highlightBodyType }: Props) {
             fill
             className="object-cover group-hover:scale-105 transition-transform duration-500"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            loading={priority ? "eager" : "lazy"}
+            priority={priority}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-gray-300">

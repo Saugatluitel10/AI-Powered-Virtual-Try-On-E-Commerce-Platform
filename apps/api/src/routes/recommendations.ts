@@ -2,6 +2,7 @@ import { Router } from "express";
 import Anthropic from "@anthropic-ai/sdk";
 import { verifyJwt, type AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
+import { cacheResponse } from "../middleware/cache";
 
 const router = Router();
 
@@ -204,20 +205,35 @@ router.post("/chat", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // GET /api/v1/recommendations/conversations
-router.get("/conversations", verifyJwt, async (req: AuthRequest, res) => {
+router.get("/conversations", verifyJwt, cacheResponse(3600, "reco"), async (req: AuthRequest, res) => {
   try {
-    const conversations = await prisma.conversation.findMany({
-      where: { userId: req.userId! },
-      orderBy: { updatedAt: "desc" },
-      take: 20,
-      select: {
-        id: true,
-        title: true,
-        createdAt: true,
-        updatedAt: true,
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize as string) || 20));
+
+    const [total, conversations] = await Promise.all([
+      prisma.conversation.count({ where: { userId: req.userId! } }),
+      prisma.conversation.findMany({
+        where: { userId: req.userId! },
+        orderBy: { updatedAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true,
+          title: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+    ]);
+    return res.json({
+      data: {
+        items: conversations,
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
       },
     });
-    return res.json({ data: conversations });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error fetching conversations";
     return res.status(500).json({ error: message });

@@ -19,7 +19,14 @@ async function resolveResultUrl(storagePath: string | null): Promise<string | nu
 // ─── GET /api/v1/wardrobe ───────────────────────────────────────────────────
 router.get("/", verifyJwt, async (req: AuthRequest, res) => {
   try {
-    const { collectionId } = req.query as { collectionId?: string };
+    const { collectionId, page: pageStr, pageSize: pageSizeStr } = req.query as {
+      collectionId?: string;
+      page?: string;
+      pageSize?: string;
+    };
+
+    const page = Math.max(1, parseInt(pageStr ?? "1") || 1);
+    const pageSize = Math.min(50, Math.max(1, parseInt(pageSizeStr ?? "20") || 20));
 
     const where: { userId: string; collectionId?: string | null } = {
       userId: req.userId!,
@@ -28,28 +35,33 @@ router.get("/", verifyJwt, async (req: AuthRequest, res) => {
       where.collectionId = collectionId;
     }
 
-    const items = await prisma.wardrobeItem.findMany({
-      where,
-      include: {
-        product: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            price: true,
-            currency: true,
-            images: true,
-            category: true,
-            garmentType: true,
-            brandId: true,
-            brand: { select: { name: true } },
-            suitableBodyTypes: true,
+    const [total, items] = await Promise.all([
+      prisma.wardrobeItem.count({ where }),
+      prisma.wardrobeItem.findMany({
+        where,
+        include: {
+          product: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              price: true,
+              currency: true,
+              images: true,
+              category: true,
+              garmentType: true,
+              brandId: true,
+              brand: { select: { name: true } },
+              suitableBodyTypes: true,
+            },
           },
+          collection: { select: { id: true, name: true } },
         },
-        collection: { select: { id: true, name: true } },
-      },
-      orderBy: { savedAt: "desc" },
-    });
+        orderBy: { savedAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
 
     const data = await Promise.all(
       items.map(async (item: typeof items[number]) => {
@@ -83,7 +95,15 @@ router.get("/", verifyJwt, async (req: AuthRequest, res) => {
       })
     );
 
-    return res.json({ data });
+    return res.json({
+      data: {
+        items: data,
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error fetching wardrobe";
     return res.status(500).json({ error: message });
