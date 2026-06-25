@@ -22,18 +22,16 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Lint
-        run: pnpm --filter web lint
+        run: pnpm --filter frontend lint
         continue-on-error: true
 
       - name: Type check
-        run: pnpm --filter web type-check
+        run: pnpm --filter frontend type-check
         env:
           NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
@@ -42,7 +40,7 @@ jobs:
           NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_placeholder
 
       - name: Build
-        run: pnpm --filter web build
+        run: pnpm --filter frontend build
         env:
           NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
@@ -65,8 +63,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
