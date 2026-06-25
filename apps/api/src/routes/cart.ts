@@ -2,7 +2,7 @@ import { Router } from "express";
 import { verifyJwt, type AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 // ─── GET /api/v1/cart ────────────────────────────────────────────────────────
 router.get("/", verifyJwt, async (req: AuthRequest, res) => {

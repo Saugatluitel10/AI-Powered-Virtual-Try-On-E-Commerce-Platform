@@ -5,7 +5,7 @@ import { getSignedUrl, BUCKETS } from "../lib/supabase";
 import { enqueueTryOn } from "../jobs/queues";
 import { redis } from "../lib/redis";
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 // ─── POST /api/v1/try-on ────────────────────────────────────────────────────
 // Submit a new try-on job.

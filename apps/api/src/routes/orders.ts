@@ -5,7 +5,7 @@ import { enqueueEmail } from "../jobs/queues";
 
 type TransactionClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 function mapOrderItems(items: Array<{ id: string; productId: string; size: string; quantity: number; priceAtTime: number; product: { name: string; images: string[]; slug: string } }>) {
   return items.map((i) => ({

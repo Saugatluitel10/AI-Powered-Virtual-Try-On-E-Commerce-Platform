@@ -2,7 +2,7 @@ import { Router, type Request } from "express";
 import { prisma } from "../lib/prisma";
 import { cacheResponse } from "../middleware/cache";
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 // ─── GET /api/v1/products ─────────────────────────────────────────────────────
 // Query params: q, category, garmentType, gender, minPrice, maxPrice,

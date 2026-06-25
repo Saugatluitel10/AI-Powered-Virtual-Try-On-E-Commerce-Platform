@@ -1,4 +1,4 @@
-import express, { type Request, type Response, type NextFunction } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import compression from "compression";
 import cors from "cors";
 import { globalLimiter, authLimiter, uploadLimiter } from "./middleware/rateLimiter";
@@ -16,7 +16,7 @@ import wardrobeRoutes from "./routes/wardrobe";
 import brandRoutes from "./routes/brand";
 import adminRoutes from "./routes/admin";
 
-const app = express();
+const app: Express = express();
 
 // ─── Gzip compression ────────────────────────────────────────────────────────
 app.use(compression());

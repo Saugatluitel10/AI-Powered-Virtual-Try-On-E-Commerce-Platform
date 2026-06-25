@@ -4,7 +4,7 @@ import { verifyJwt, type AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import { getSignedUrl, BUCKETS } from "../lib/supabase";
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 // ─── Helper: resolve signed URL for a try-on result ─────────────────────────
 async function resolveResultUrl(storagePath: string | null): Promise<string | null> {

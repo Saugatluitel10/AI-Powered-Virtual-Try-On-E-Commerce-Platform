@@ -4,7 +4,7 @@ import { verifyJwt, type AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import { enqueueEmail } from "../jobs/queues";
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 const ESEWA_MERCHANT_CODE = process.env.ESEWA_MERCHANT_CODE ?? "EPAYTEST";
 const ESEWA_SECRET_KEY = process.env.ESEWA_SECRET_KEY ?? "8gBm/:&EnhH.1/q";

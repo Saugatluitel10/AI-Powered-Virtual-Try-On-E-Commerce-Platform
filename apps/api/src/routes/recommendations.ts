@@ -4,7 +4,7 @@ import { verifyJwt, type AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import { cacheResponse } from "../middleware/cache";
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,

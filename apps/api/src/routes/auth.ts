@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabase";
 import { prisma } from "../lib/prisma";
 import { verifyJwt, type AuthRequest } from "../middleware/auth";
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 // POST /api/v1/auth/sync-user
 // Called by the frontend after a successful Supabase signUp to create the local DB record.

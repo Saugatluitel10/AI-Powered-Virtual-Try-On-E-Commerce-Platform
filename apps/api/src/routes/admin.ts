@@ -2,7 +2,7 @@ import { Router } from "express";
 import { verifyJwt, requireRole, type AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 router.use(verifyJwt, requireRole("ADMIN"));
 

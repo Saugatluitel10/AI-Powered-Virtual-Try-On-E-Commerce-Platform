@@ -6,7 +6,7 @@ import { prisma } from "../lib/prisma";
 import { enqueueBodyAnalysis } from "../jobs/queues";
 import { validateFileMagicBytes } from "../middleware/validateUpload";
 
-const router = Router();
+const router: ReturnType<typeof Router> = Router();
 
 const upload = multer({
   storage: multer.memoryStorage(),
