@@ -12,7 +12,6 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
 const MAX_BYTES = 10 * 1024 * 1024;
 const ALLOWED_TYPES = ["image/jpeg", "image/png"];
 const MIN_WIDTH = 400;
@@ -29,7 +28,6 @@ const TIPS = [
 
 type Step = 1 | 2 | 3;
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
 export default function UploadPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -41,7 +39,6 @@ export default function UploadPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
 
-  // Camera
   const [cameraActive, setCameraActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -50,10 +47,8 @@ export default function UploadPage() {
     if (!loading && !user) router.push("/login?next=/upload");
   }, [loading, user, router]);
 
-  // Stop camera stream on unmount
   useEffect(() => () => stopCamera(), []);
 
-  // Revoke object URL on unmount
   useEffect(
     () => () => {
       if (preview) URL.revokeObjectURL(preview);
@@ -61,7 +56,6 @@ export default function UploadPage() {
     [preview]
   );
 
-  // ─── Validation ─────────────────────────────────────────────────────────────
   async function validateFile(f: File): Promise<string | null> {
     if (!ALLOWED_TYPES.includes(f.type)) return "Only JPEG and PNG images are accepted.";
     if (f.size > MAX_BYTES)
@@ -99,7 +93,6 @@ export default function UploadPage() {
     setPreview(URL.createObjectURL(f));
   }
 
-  // ─── Dropzone ───────────────────────────────────────────────────────────────
   const onDrop = useCallback(
     (accepted: File[]) => {
       if (accepted[0]) applyFile(accepted[0]);
@@ -115,7 +108,6 @@ export default function UploadPage() {
     onDropRejected: () => setValidationError("Only JPEG and PNG files are accepted."),
   });
 
-  // ─── Camera ─────────────────────────────────────────────────────────────────
   async function startCamera() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -168,7 +160,6 @@ export default function UploadPage() {
     stopCamera();
   }
 
-  // ─── Upload ─────────────────────────────────────────────────────────────────
   async function handleUpload() {
     if (!file) return;
     setUploadError(null);
@@ -202,40 +193,38 @@ export default function UploadPage() {
   if (loading) return null;
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-10 space-y-6">
-      {/* Step indicator */}
+    <div className="max-w-2xl mx-auto px-4 py-6 sm:py-10 space-y-6">
       <StepIndicator current={step} />
 
-      {/* ─── Step 1: Instructions ─────────────────────────────────────────── */}
+      {/* Step 1: Instructions */}
       {step === 1 && (
         <Card>
           <CardContent className="pt-6 space-y-6">
             <div className="text-center space-y-1">
-              <h1 className="text-2xl font-semibold">Prepare your photo</h1>
+              <h1 className="text-xl sm:text-2xl font-semibold">Prepare your photo</h1>
               <p className="text-sm text-muted-foreground">
                 A good photo helps our AI measure you accurately and find your perfect fit.
               </p>
             </div>
 
-            <ul className="space-y-3">
+            <ul className="space-y-3" role="list" aria-label="Photo tips">
               {TIPS.map((tip) => (
                 <li key={tip} className="flex items-start gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 shrink-0" />
+                  <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 shrink-0" aria-hidden="true" />
                   <span className="text-sm">{tip}</span>
                 </li>
               ))}
             </ul>
 
-            {/* Good vs bad example */}
-            <div className="grid grid-cols-2 gap-4 rounded-lg bg-muted p-4 text-center text-xs">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 rounded-lg bg-muted p-3 sm:p-4 text-center text-xs">
               <div className="space-y-2">
-                <div className="h-28 rounded-md bg-green-100 flex items-center justify-center text-4xl">
+                <div className="h-24 sm:h-28 rounded-md bg-green-100 flex items-center justify-center text-4xl" role="img" aria-label="Good photo example: full body with plain background">
                   🧍
                 </div>
                 <p className="text-green-700 font-medium">✓ Full body, plain background</p>
               </div>
               <div className="space-y-2">
-                <div className="h-28 rounded-md bg-red-100 flex items-center justify-center text-4xl">
+                <div className="h-24 sm:h-28 rounded-md bg-red-100 flex items-center justify-center text-4xl" role="img" aria-label="Bad photo example: cropped or cluttered">
                   🤳
                 </div>
                 <p className="text-red-600 font-medium">✗ Cropped or cluttered</p>
@@ -244,31 +233,30 @@ export default function UploadPage() {
 
             <Button className="w-full" onClick={() => setStep(2)}>
               Got it — choose photo
-              <ChevronRight className="h-4 w-4 ml-1" />
+              <ChevronRight className="h-4 w-4 ml-1" aria-hidden="true" />
             </Button>
           </CardContent>
         </Card>
       )}
 
-      {/* ─── Step 2: File picker / camera ────────────────────────────────── */}
+      {/* Step 2: File picker / camera */}
       {step === 2 && (
         <Card>
           <CardContent className="pt-6 space-y-5">
             <div className="text-center space-y-1">
-              <h1 className="text-2xl font-semibold">Upload your photo</h1>
+              <h1 className="text-xl sm:text-2xl font-semibold">Upload your photo</h1>
               <p className="text-sm text-muted-foreground">
                 JPEG or PNG · max 10 MB · min 400 × 600 px
               </p>
             </div>
 
             {(validationError || uploadError) && (
-              <div className="flex items-start gap-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
-                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+              <div className="flex items-start gap-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700" role="alert">
+                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden="true" />
                 {validationError ?? uploadError}
               </div>
             )}
 
-            {/* Live camera view */}
             {cameraActive && (
               <div className="space-y-3">
                 <video
@@ -277,10 +265,11 @@ export default function UploadPage() {
                   autoPlay
                   muted
                   playsInline
+                  aria-label="Camera preview"
                 />
                 <div className="flex gap-2">
-                  <Button className="flex-1" onClick={capturePhoto}>
-                    <Camera className="h-4 w-4 mr-2" />
+                  <Button className="flex-1" onClick={capturePhoto} aria-label="Capture photo from camera">
+                    <Camera className="h-4 w-4 mr-2" aria-hidden="true" />
                     Capture
                   </Button>
                   <Button variant="outline" onClick={stopCamera}>
@@ -290,7 +279,6 @@ export default function UploadPage() {
               </div>
             )}
 
-            {/* Preview of selected image */}
             {!cameraActive && preview && (
               <div className="space-y-3">
                 <div className="relative aspect-[3/4] w-full rounded-lg overflow-hidden bg-muted">
@@ -303,40 +291,42 @@ export default function UploadPage() {
                   />
                 </div>
                 <Button variant="outline" className="w-full" onClick={resetSelection}>
-                  <RotateCcw className="h-4 w-4 mr-2" />
+                  <RotateCcw className="h-4 w-4 mr-2" aria-hidden="true" />
                   Choose a different photo
                 </Button>
               </div>
             )}
 
-            {/* Drop zone */}
             {!cameraActive && !preview && (
               <div className="space-y-3">
                 <div
                   {...getRootProps()}
                   className={cn(
-                    "border-2 border-dashed rounded-lg p-10 text-center cursor-pointer transition-colors select-none",
+                    "border-2 border-dashed rounded-lg p-6 sm:p-10 text-center cursor-pointer transition-colors select-none",
                     isDragActive
                       ? "border-primary bg-primary/5"
                       : "border-muted-foreground/30 hover:border-primary hover:bg-muted/50"
                   )}
+                  role="button"
+                  aria-label="Drop zone — drag and drop or click to select a photo"
+                  tabIndex={0}
                 >
-                  <input {...getInputProps()} />
-                  <Upload className="h-9 w-9 mx-auto mb-3 text-muted-foreground" />
+                  <input {...getInputProps()} aria-label="File input for photo upload" />
+                  <Upload className="h-9 w-9 mx-auto mb-3 text-muted-foreground" aria-hidden="true" />
                   <p className="text-sm font-medium">
                     {isDragActive ? "Drop your photo here" : "Drag & drop or click to select"}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">JPEG or PNG · max 10 MB</p>
                 </div>
 
-                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <div className="flex items-center gap-3 text-xs text-muted-foreground" aria-hidden="true">
                   <div className="flex-1 h-px bg-border" />
                   or
                   <div className="flex-1 h-px bg-border" />
                 </div>
 
                 <Button variant="outline" className="w-full" onClick={startCamera}>
-                  <Camera className="h-4 w-4 mr-2" />
+                  <Camera className="h-4 w-4 mr-2" aria-hidden="true" />
                   Use camera
                 </Button>
               </div>
@@ -354,12 +344,12 @@ export default function UploadPage() {
         </Card>
       )}
 
-      {/* ─── Step 3: Progress ────────────────────────────────────────────── */}
+      {/* Step 3: Progress */}
       {step === 3 && (
         <Card>
           <CardContent className="pt-6 space-y-6 text-center">
             <div className="space-y-1">
-              <h1 className="text-2xl font-semibold">
+              <h1 className="text-xl sm:text-2xl font-semibold">
                 {progress < 100 ? "Uploading your photo…" : "Upload complete!"}
               </h1>
               <p className="text-sm text-muted-foreground">
@@ -369,7 +359,7 @@ export default function UploadPage() {
               </p>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} aria-label="Upload progress">
               <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
                 <div
                   className="h-3 rounded-full bg-primary transition-all duration-300 ease-out"
@@ -380,8 +370,8 @@ export default function UploadPage() {
             </div>
 
             {progress === 100 && (
-              <div className="flex justify-center">
-                <CheckCircle2 className="h-12 w-12 text-green-500" />
+              <div className="flex justify-center" role="status" aria-label="Upload complete">
+                <CheckCircle2 className="h-12 w-12 text-green-500" aria-hidden="true" />
               </div>
             )}
           </CardContent>
@@ -391,7 +381,6 @@ export default function UploadPage() {
   );
 }
 
-// ─── Step indicator ────────────────────────────────────────────────────────────
 function StepIndicator({ current }: { current: Step }) {
   const steps: [Step, string][] = [
     [1, "Instructions"],
@@ -400,7 +389,7 @@ function StepIndicator({ current }: { current: Step }) {
   ];
 
   return (
-    <div className="flex items-center">
+    <nav aria-label="Upload progress" className="flex items-center">
       {steps.map(([n, label], i) => {
         const done = current > n;
         const active = current === n;
@@ -416,6 +405,8 @@ function StepIndicator({ current }: { current: Step }) {
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground"
                 )}
+                aria-current={active ? "step" : undefined}
+                aria-label={`Step ${n} of 3: ${label}${done ? " (complete)" : active ? " (current)" : ""}`}
               >
                 {done ? "✓" : n}
               </div>
@@ -429,11 +420,11 @@ function StepIndicator({ current }: { current: Step }) {
               </span>
             </div>
             {i < steps.length - 1 && (
-              <div className="flex-1 h-px bg-border mx-2 hidden sm:block" />
+              <div className="flex-1 h-px bg-border mx-2 hidden sm:block" aria-hidden="true" />
             )}
           </div>
         );
       })}
-    </div>
+    </nav>
   );
 }

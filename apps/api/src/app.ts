@@ -1,6 +1,8 @@
 import express, { type Request, type Response, type NextFunction } from "express";
 import compression from "compression";
 import cors from "cors";
+import { globalLimiter, authLimiter, uploadLimiter } from "./middleware/rateLimiter";
+import { sanitizeBody } from "./middleware/sanitize";
 
 import authRoutes from "./routes/auth";
 import userRoutes from "./routes/users";
@@ -19,18 +21,43 @@ const app = express();
 // ─── Gzip compression ────────────────────────────────────────────────────────
 app.use(compression());
 
-// ─── CORS ─────────────────────────────────────────────────────────────────────
+// ─── CORS whitelist ──────────────────────────────────────────────────────────
+const allowedOrigins = (process.env.CORS_ORIGINS ?? process.env.FRONTEND_URL ?? "http://localhost:3000")
+  .split(",")
+  .map((o) => o.trim());
+
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL ?? "http://localhost:3000",
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
   })
 );
 
+// ─── Global rate limiting ────────────────────────────────────────────────────
+app.use(globalLimiter);
+
 // ─── Body parsing ────────────────────────────────────────────────────────────
-// Raw body must come before json() so Stripe webhook signatures can be verified
 app.use("/api/v1/webhooks/stripe", express.raw({ type: "application/json" }));
 app.use(express.json({ limit: "10mb" }));
+
+// ─── Input sanitization ─────────────────────────────────────────────────────
+app.use(sanitizeBody);
+
+// ─── Security headers ───────────────────────────────────────────────────────
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("X-XSS-Protection", "0");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  next();
+});
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get("/health", (_req, res) => {
@@ -39,8 +66,8 @@ app.get("/health", (_req, res) => {
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 const v1 = "/api/v1";
-app.use(`${v1}/auth`, authRoutes);
-app.use(`${v1}/users`, userRoutes);
+app.use(`${v1}/auth`, authLimiter, authRoutes);
+app.use(`${v1}/users`, uploadLimiter, userRoutes);
 app.use(`${v1}/products`, productRoutes);
 app.use(`${v1}/orders`, orderRoutes);
 app.use(`${v1}/cart`, cartRoutes);
@@ -57,7 +84,6 @@ app.use((_req, res) => {
 });
 
 // ─── Global error handler ─────────────────────────────────────────────────────
-// Must have 4 params so Express recognises it as an error handler
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error("[Error]", err.message, err.stack);

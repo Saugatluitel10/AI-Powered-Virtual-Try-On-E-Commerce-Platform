@@ -162,16 +162,17 @@ export default function CheckoutPage() {
         </form>
       )}
 
-      <div className="max-w-5xl mx-auto px-4 py-8">
+      <div className="max-w-5xl mx-auto px-4 py-6 sm:py-8">
         {/* Header */}
-        <div className="flex items-center gap-3 mb-8">
+        <div className="flex items-center gap-3 mb-6 sm:mb-8">
           <Link
             href="/shop"
             className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+            aria-label="Back to shop"
           >
-            <ArrowLeft className="w-5 h-5 text-gray-600" />
+            <ArrowLeft className="w-5 h-5 text-gray-600" aria-hidden="true" />
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">Checkout</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Checkout</h1>
         </div>
 
         {serverItems.length === 0 ? (
@@ -273,30 +274,29 @@ export default function CheckoutPage() {
                     <CreditCard className="w-5 h-5 text-purple-600" />
                     Payment Method
                   </h2>
-                  <div className="space-y-3">
+                  <fieldset>
+                    <legend className="sr-only">Select payment method</legend>
+                    <div className="space-y-3">
                     {([
                       {
                         id: "esewa" as const,
                         label: "eSewa",
                         desc: "Pay with your eSewa wallet",
-                        color: "bg-green-500",
                       },
                       {
                         id: "khalti" as const,
                         label: "Khalti",
                         desc: "Pay with Khalti digital wallet",
-                        color: "bg-purple-500",
                       },
                       {
                         id: "cod" as const,
                         label: "Cash on Delivery",
                         desc: "Pay when you receive your order",
-                        color: "bg-gray-500",
                       },
                     ] as const).map((method) => (
                       <label
                         key={method.id}
-                        className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                        className={`flex items-center gap-3 p-3 sm:p-4 rounded-xl border-2 cursor-pointer transition-all ${
                           paymentMethod === method.id
                             ? "border-purple-500 bg-purple-50"
                             : "border-gray-200 hover:border-gray-300"
@@ -309,19 +309,22 @@ export default function CheckoutPage() {
                           checked={paymentMethod === method.id}
                           onChange={() => setPaymentMethod(method.id)}
                           className="sr-only"
+                          aria-describedby={`${method.id}-desc`}
                         />
                         <div
-                          className={`w-3 h-3 rounded-full ${
+                          className={`w-3 h-3 rounded-full shrink-0 ${
                             paymentMethod === method.id ? "bg-purple-600" : "bg-gray-300"
                           }`}
+                          aria-hidden="true"
                         />
                         <div>
                           <p className="font-medium text-gray-900">{method.label}</p>
-                          <p className="text-sm text-gray-500">{method.desc}</p>
+                          <p className="text-sm text-gray-500" id={`${method.id}-desc`}>{method.desc}</p>
                         </div>
                       </label>
                     ))}
                   </div>
+                  </fieldset>
                 </CardContent>
               </Card>
             </div>
@@ -385,8 +388,8 @@ export default function CheckoutPage() {
                   </div>
 
                   {error && (
-                    <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
-                      <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                    <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2" role="alert">
+                      <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" aria-hidden="true" />
                       <p className="text-sm text-red-700">{error}</p>
                     </div>
                   )}

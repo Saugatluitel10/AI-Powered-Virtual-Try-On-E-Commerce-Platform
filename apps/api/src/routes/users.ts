@@ -4,6 +4,7 @@ import { verifyJwt, type AuthRequest } from "../middleware/auth";
 import { uploadUserPhoto, getSignedUrl, BUCKETS } from "../lib/supabase";
 import { prisma } from "../lib/prisma";
 import { enqueueBodyAnalysis } from "../jobs/queues";
+import { validateFileMagicBytes } from "../middleware/validateUpload";
 
 const router = Router();
 
@@ -54,6 +55,7 @@ router.post(
   "/me/photo",
   verifyJwt,
   upload.single("photo"),
+  validateFileMagicBytes,
   async (req: AuthRequest, res) => {
     try {
       if (!req.file) {
