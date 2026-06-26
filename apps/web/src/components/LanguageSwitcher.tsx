@@ -4,8 +4,9 @@ import { useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
 
 const LOCALES = [
-  { code: "en", label: "EN" },
-  { code: "ne", label: "ने" },
+  { code: "en", label: "EN", ariaLabel: "English" },
+  { code: "ne", label: "ने", ariaLabel: "नेपाली" },
+  { code: "hi", label: "हि", ariaLabel: "हिन्दी" },
 ] as const;
 
 export default function LanguageSwitcher() {
@@ -19,7 +20,7 @@ export default function LanguageSwitcher() {
 
   return (
     <div className="flex items-center gap-1" role="group" aria-label="Language selection">
-      {LOCALES.map(({ code, label }) => (
+      {LOCALES.map(({ code, label, ariaLabel }) => (
         <button
           key={code}
           onClick={() => switchLocale(code)}
@@ -29,7 +30,7 @@ export default function LanguageSwitcher() {
               : "text-gray-500 hover:text-gray-700"
           }`}
           aria-current={locale === code ? "true" : undefined}
-          aria-label={code === "en" ? "English" : "नेपाली"}
+          aria-label={ariaLabel}
         >
           {label}
         </button>

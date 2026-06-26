@@ -15,6 +15,10 @@ import recommendationRoutes from "./routes/recommendations";
 import wardrobeRoutes from "./routes/wardrobe";
 import brandRoutes from "./routes/brand";
 import adminRoutes from "./routes/admin";
+import tenantRoutes from "./routes/tenants";
+import publicApiRoutes from "./routes/publicApi";
+import feedbackRoutes from "./routes/feedback";
+import saasWebhookRoutes from "./routes/saasWebhook";
 
 const app: Express = express();
 
@@ -44,6 +48,7 @@ app.use(globalLimiter);
 
 // ─── Body parsing ────────────────────────────────────────────────────────────
 app.use("/api/v1/webhooks/stripe", express.raw({ type: "application/json" }));
+app.use("/api/v1/webhooks/saas", express.raw({ type: "application/json" }));
 app.use(express.json({ limit: "10mb" }));
 
 // ─── Input sanitization ─────────────────────────────────────────────────────
@@ -77,6 +82,10 @@ app.use(`${v1}/recommendations`, recommendationRoutes);
 app.use(`${v1}/wardrobe`, wardrobeRoutes);
 app.use(`${v1}/brand`, brandRoutes);
 app.use(`${v1}/admin`, adminRoutes);
+app.use(`${v1}/tenants`, tenantRoutes);
+app.use(`${v1}/public`, publicApiRoutes);
+app.use(`${v1}/feedback`, feedbackRoutes);
+app.use(`${v1}/webhooks/saas`, saasWebhookRoutes);
 
 // ─── 404 ──────────────────────────────────────────────────────────────────────
 app.use((_req, res) => {

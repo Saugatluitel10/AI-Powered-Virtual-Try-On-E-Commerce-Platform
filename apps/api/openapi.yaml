@@ -1,0 +1,306 @@
+openapi: 3.1.0
+info:
+  title: VTryon Public API
+  description: |
+    Virtual try-on and size recommendation API for third-party retailers.
+    Authenticate with an API key via the `X-API-Key` header.
+  version: 1.0.0
+  contact:
+    name: VTryon Support
+    email: api@vtryon.com
+
+servers:
+  - url: https://api.vtryon.com/api/v1/public
+    description: Production
+  - url: http://localhost:8000/api/v1/public
+    description: Local development
+
+security:
+  - ApiKeyAuth: []
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Your tenant API key (starts with `vtk_`)
+
+  schemas:
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+          nullable: true
+        price:
+          type: number
+        currency:
+          type: string
+        sizes:
+          type: array
+          items:
+            type: string
+        category:
+          type: string
+        garmentType:
+          type: string
+          nullable: true
+        gender:
+          type: string
+          nullable: true
+          enum: [mens, womens, unisex, kids]
+        images:
+          type: array
+          items:
+            type: string
+        isTryonEnabled:
+          type: boolean
+
+    PaginatedProducts:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Product"
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalPages:
+          type: integer
+
+    TryOnJob:
+      type: object
+      properties:
+        jobId:
+          type: string
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+        pollUrl:
+          type: string
+
+    TryOnResult:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+        resultImageUrl:
+          type: string
+          nullable: true
+        sizeRecommended:
+          type: string
+          nullable: true
+        processingTimeMs:
+          type: integer
+          nullable: true
+        errorMessage:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    SizeRecommendation:
+      type: object
+      properties:
+        recommendedSize:
+          type: string
+          nullable: true
+        confidence:
+          type: number
+        reasoning:
+          type: string
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        default: 20
+        maximum: 50
+
+paths:
+  /products:
+    get:
+      summary: List products
+      operationId: listProducts
+      tags: [Products]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: gender
+          in: query
+          schema:
+            type: string
+            enum: [mens, womens, unisex, kids]
+        - name: tryonOnly
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Paginated product list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PaginatedProducts"
+        "401":
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /products/{id}:
+    get:
+      summary: Get product details
+      operationId: getProduct
+      tags: [Products]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Product details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Product"
+        "404":
+          description: Product not found
+
+  /tryon:
+    post:
+      summary: Submit a virtual try-on job
+      operationId: createTryOn
+      tags: [Try-On]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, userPhotoUrl]
+              properties:
+                productId:
+                  type: string
+                  description: Product ID to try on
+                userPhotoUrl:
+                  type: string
+                  format: uri
+                  description: URL of the user's full-body photo
+      responses:
+        "202":
+          description: Job accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/TryOnJob"
+        "400":
+          description: Missing parameters
+        "404":
+          description: Product not found or try-on not enabled
+
+  /tryon/{jobId}:
+    get:
+      summary: Poll try-on job status
+      operationId: getTryOnStatus
+      tags: [Try-On]
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Try-on job status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/TryOnResult"
+        "404":
+          description: Job not found
+
+  /size-recommendation:
+    post:
+      summary: Get AI size recommendation
+      operationId: getSizeRecommendation
+      tags: [Size]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId]
+              properties:
+                productId:
+                  type: string
+                bust:
+                  type: number
+                  description: Bust measurement in cm
+                waist:
+                  type: number
+                  description: Waist measurement in cm
+                hips:
+                  type: number
+                  description: Hip measurement in cm
+      responses:
+        "200":
+          description: Size recommendation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/SizeRecommendation"
+        "400":
+          description: Missing measurements

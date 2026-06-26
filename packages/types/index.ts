@@ -216,6 +216,37 @@ export interface SizeRecommendation {
   reasoning: string;
 }
 
+// ─── SaaS / Tenants ──────────────────────────────────────────────────────────
+
+export type SubscriptionTier = "FREE" | "STARTER" | "GROWTH" | "ENTERPRISE";
+
+export interface Tenant {
+  id: string;
+  name: string;
+  slug: string;
+  ownerEmail: string;
+  tier: SubscriptionTier;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface ApiKeyInfo {
+  id: string;
+  keyPrefix: string;
+  label: string;
+  scopes: string[];
+  isActive: boolean;
+  lastUsedAt: string | null;
+  createdAt: string;
+}
+
+export interface ApiUsageSummary {
+  period: string;
+  totalRequests: number;
+  tier: SubscriptionTier;
+  endpoints: Array<{ endpoint: string; requests: number; avgLatencyMs: number }>;
+}
+
 // ─── API helpers ──────────────────────────────────────────────────────────────
 
 export interface ApiError {

@@ -1,0 +1,19 @@
+{
+  "name": "@vtryon/sdk",
+  "version": "1.0.0",
+  "description": "JavaScript SDK for the VTryon virtual try-on API",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": ["virtual-try-on", "fashion", "api", "sdk"],
+  "license": "MIT",
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^6.0.3"
+  }
+}

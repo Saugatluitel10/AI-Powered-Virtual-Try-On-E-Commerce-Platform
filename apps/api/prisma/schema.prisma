@@ -270,3 +270,63 @@ model ReturnRequest {
   @@index([orderId])
   @@index([userId])
 }
+
+// ─── SaaS / API Key Management ───────────────────────────────────────────────
+
+enum SubscriptionTier {
+  FREE
+  STARTER
+  GROWTH
+  ENTERPRISE
+}
+
+model Tenant {
+  id               String           @id @default(cuid())
+  name             String
+  slug             String           @unique
+  ownerEmail       String
+  stripeCustomerId String?          @unique
+  subscriptionId   String?
+  tier             SubscriptionTier @default(FREE)
+  isActive         Boolean          @default(true)
+  apiKeys          ApiKey[]
+  usageLogs        ApiUsageLog[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([ownerEmail])
+}
+
+model ApiKey {
+  id          String        @id @default(cuid())
+  tenantId    String
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  keyHash     String        @unique
+  keyPrefix   String
+  label       String        @default("Default")
+  scopes      String[]
+  isActive    Boolean       @default(true)
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  usageLogs   ApiUsageLog[]
+  createdAt   DateTime      @default(now())
+
+  @@index([tenantId])
+  @@index([keyHash])
+}
+
+model ApiUsageLog {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  apiKeyId  String
+  apiKey    ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  endpoint  String
+  method    String
+  status    Int
+  latencyMs Int
+  timestamp DateTime @default(now())
+
+  @@index([tenantId, timestamp])
+  @@index([apiKeyId, timestamp])
+}

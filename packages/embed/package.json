@@ -1,0 +1,16 @@
+{
+  "name": "@vtryon/embed",
+  "version": "1.0.0",
+  "description": "Embeddable virtual try-on widget for no-code integration",
+  "main": "dist/vtryon-widget.js",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup src/widget.ts --format iife --global-name VTryon --minify --out-dir dist --entry src/widget.ts --name vtryon-widget"
+  },
+  "keywords": ["virtual-try-on", "widget", "embed", "iframe"],
+  "license": "MIT",
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^6.0.3"
+  }
+}
