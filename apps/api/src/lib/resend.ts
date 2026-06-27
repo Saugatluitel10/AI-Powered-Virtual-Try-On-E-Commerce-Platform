@@ -65,6 +65,74 @@ export async function sendReturnRequestUpdate(
   });
 }
 
+export async function sendOrderReceipt(
+  to: string,
+  orderId: string,
+  total: number,
+  currency: string,
+  paymentMethod: string,
+  invoiceUrl: string
+) {
+  const fmtCurrency = currency === "NPR" ? `Rs. ${total.toLocaleString()}` : `${currency} ${total.toFixed(2)}`;
+  await resend.emails.send({
+    from: process.env.EMAIL_FROM ?? "VTryon <noreply@vtryon.com>",
+    to,
+    subject: `Payment Receipt — #${orderId.slice(0, 8).toUpperCase()}`,
+    html: `
+      <h2>Payment Receipt</h2>
+      <p>Thank you for your purchase!</p>
+      <p>Order ID: <strong>#${orderId.slice(0, 8).toUpperCase()}</strong></p>
+      <p>Amount Paid: <strong>${fmtCurrency}</strong></p>
+      <p>Payment Method: <strong>${paymentMethod}</strong></p>
+      <p><a href="${invoiceUrl}">View Full Invoice</a></p>
+    `,
+  });
+}
+
+export async function sendRefundConfirmation(
+  to: string,
+  orderId: string,
+  refundAmount: number,
+  currency: string,
+  reason: string
+) {
+  const fmtCurrency = currency === "NPR" ? `Rs. ${refundAmount.toLocaleString()}` : `${currency} ${refundAmount.toFixed(2)}`;
+  await resend.emails.send({
+    from: process.env.EMAIL_FROM ?? "VTryon <noreply@vtryon.com>",
+    to,
+    subject: `Refund Initiated — #${orderId.slice(0, 8).toUpperCase()}`,
+    html: `
+      <h2>Refund Initiated</h2>
+      <p>We've initiated a refund for your order <strong>#${orderId.slice(0, 8).toUpperCase()}</strong>.</p>
+      <p>Refund Amount: <strong>${fmtCurrency}</strong></p>
+      <p>Reason: ${reason}</p>
+      <p>The refund will be processed within 5-7 business days.</p>
+    `,
+  });
+}
+
+export async function sendPriceAlert(
+  to: string,
+  productName: string,
+  productSlug: string,
+  currentPrice: number,
+  targetPrice: number,
+  currency: string
+) {
+  const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:3000";
+  const fmtPrice = currency === "NPR" ? `Rs. ${currentPrice.toLocaleString()}` : `${currency} ${currentPrice.toFixed(2)}`;
+  await resend.emails.send({
+    from: process.env.EMAIL_FROM ?? "VTryon <noreply@vtryon.com>",
+    to,
+    subject: `Price Drop Alert — ${productName}`,
+    html: `
+      <h2>Price Drop!</h2>
+      <p><strong>${productName}</strong> is now <strong>${fmtPrice}</strong> — below your target of ${currency === "NPR" ? `Rs. ${targetPrice.toLocaleString()}` : `${currency} ${targetPrice.toFixed(2)}`}.</p>
+      <p><a href="${frontendUrl}/shop/${productSlug}">View Product</a></p>
+    `,
+  });
+}
+
 export async function sendPasswordReset(to: string, resetUrl: string) {
   await resend.emails.send({
     from: process.env.EMAIL_FROM ?? "VTryon <noreply@vtryon.com>",

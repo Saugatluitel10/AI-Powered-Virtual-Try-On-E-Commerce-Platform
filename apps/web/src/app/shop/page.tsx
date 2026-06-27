@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { SlidersHorizontal, Search, X, ShoppingBag } from "lucide-react";
+import { SlidersHorizontal, Search, X, ShoppingBag, LayoutGrid, List } from "lucide-react";
 import api from "@/lib/api";
 import type { ProductListItem } from "@/types/product";
 import ProductCard from "@/components/catalog/ProductCard";
@@ -235,6 +235,10 @@ export default function ShopPage() {
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [search, setSearch] = useState("");
   const [committed, setCommitted] = useState<Filters>(DEFAULT_FILTERS);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [suggestions, setSuggestions] = useState<Array<{ id: string; name: string; slug: string }>>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const changeFilter = useCallback((key: keyof Filters, value: string | boolean) => {
@@ -245,6 +249,20 @@ export default function ShopPage() {
     setFilters(DEFAULT_FILTERS);
     setSearch("");
     setCommitted(DEFAULT_FILTERS);
+  }, []);
+
+  const fetchSuggestions = useCallback((q: string) => {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    if (q.length < 2) { setSuggestions([]); return; }
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await api.get<{ data: Array<{ id: string; name: string; slug: string }> }>(
+          `/products/search/autocomplete?q=${encodeURIComponent(q)}`
+        );
+        setSuggestions(res.data.data);
+        setShowSuggestions(true);
+      } catch { setSuggestions([]); }
+    }, 300);
   }, []);
 
   // Commit filters on apply (debounced by search input blur / immediate for toggles)
@@ -332,21 +350,46 @@ export default function ShopPage() {
           <Input
             placeholder="Search products…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && applyFilters()}
-            onBlur={applyFilters}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              fetchSuggestions(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { applyFilters(); setShowSuggestions(false); }
+            }}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+            onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
             className="pl-9"
           />
           {search && (
             <button
               onClick={() => {
                 setSearch("");
+                setSuggestions([]);
                 setCommitted((prev) => ({ ...prev, q: "" }));
               }}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
             >
               <X className="h-4 w-4" />
             </button>
+          )}
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+              {suggestions.map((s) => (
+                <button
+                  key={s.id}
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-purple-50 transition-colors"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setSearch(s.name);
+                    setShowSuggestions(false);
+                    setCommitted((prev) => ({ ...prev, q: s.name }));
+                  }}
+                >
+                  {s.name}
+                </button>
+              ))}
+            </div>
           )}
         </div>
 
@@ -364,6 +407,24 @@ export default function ShopPage() {
             <SelectItem value="price_desc">Price: High → Low</SelectItem>
           </SelectContent>
         </Select>
+
+        {/* View toggle */}
+        <div className="hidden sm:flex border rounded-lg overflow-hidden">
+          <button
+            onClick={() => setViewMode("grid")}
+            className={cn("p-2", viewMode === "grid" ? "bg-purple-100 text-purple-700" : "text-gray-400 hover:text-gray-600")}
+            aria-label="Grid view"
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setViewMode("list")}
+            className={cn("p-2", viewMode === "list" ? "bg-purple-100 text-purple-700" : "text-gray-400 hover:text-gray-600")}
+            aria-label="List view"
+          >
+            <List className="h-4 w-4" />
+          </button>
+        </div>
 
         {/* Mobile filter trigger */}
         <Sheet>
@@ -423,15 +484,19 @@ export default function ShopPage() {
               : `${total.toLocaleString()} product${total !== 1 ? "s" : ""}`}
           </p>
 
-          {/* Grid */}
+          {/* Grid / List */}
           {allProducts.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className={viewMode === "grid"
+              ? "grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+              : "space-y-3"
+            }>
               {allProducts.map((product, idx) => (
                 <ProductCard
                   key={product.id}
                   product={product}
                   highlightBodyType={profile?.bodyType ?? null}
                   priority={idx < 6}
+                  layout={viewMode}
                 />
               ))}
             </div>

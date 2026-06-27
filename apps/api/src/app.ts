@@ -19,6 +19,8 @@ import tenantRoutes from "./routes/tenants";
 import publicApiRoutes from "./routes/publicApi";
 import feedbackRoutes from "./routes/feedback";
 import saasWebhookRoutes from "./routes/saasWebhook";
+import reviewRoutes from "./routes/reviews";
+import notificationRoutes from "./routes/notifications";
 
 const app: Express = express();
 
@@ -85,6 +87,8 @@ app.use(`${v1}/admin`, adminRoutes);
 app.use(`${v1}/tenants`, tenantRoutes);
 app.use(`${v1}/public`, publicApiRoutes);
 app.use(`${v1}/feedback`, feedbackRoutes);
+app.use(`${v1}/reviews`, reviewRoutes);
+app.use(`${v1}/notifications`, notificationRoutes);
 app.use(`${v1}/webhooks/saas`, saasWebhookRoutes);
 
 // ─── 404 ──────────────────────────────────────────────────────────────────────

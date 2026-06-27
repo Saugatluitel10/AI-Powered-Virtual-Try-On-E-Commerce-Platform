@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { Send, Sparkles, Loader2, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import api from "@/lib/api";
@@ -18,6 +19,35 @@ const SUGGESTED_PROMPTS = [
   "What suits my body type?",
   "Complete outfit under Rs. 5000",
 ];
+
+function renderWithLinks(text: string): React.ReactNode[] {
+  const regex = /\[([^\]]+)\]\((\/shop\/[^\)]+)\)/g;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    parts.push(
+      <Link
+        key={match.index}
+        href={match[2]}
+        className="text-purple-600 underline hover:text-purple-800 font-medium"
+      >
+        {match[1]}
+      </Link>
+    );
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : [text];
+}
 
 export default function StyleChatbot() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -190,7 +220,7 @@ export default function StyleChatbot() {
                 </div>
               ) : (
                 <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                  {msg.content}
+                  {renderWithLinks(msg.content)}
                 </div>
               )}
             </div>

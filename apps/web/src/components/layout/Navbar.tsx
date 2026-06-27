@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ShoppingBag, Sparkles, User, Menu, X, LogOut } from "lucide-react";
+import { ShoppingBag, Sparkles, User, Menu, X, LogOut, Bell } from "lucide-react";
 import { useState, useCallback, useEffect } from "react";
 import { useAuthStore } from "@/store/authStore";
 import { useCartStore } from "@/store/cartStore";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
+import api from "@/lib/api";
 import CartDrawer from "@/components/cart/CartDrawer";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 
@@ -25,8 +26,22 @@ export default function Navbar() {
   const { signOut } = useAuth();
   const isAuthenticated = !!storeUser;
   const itemCount = useCartStore((s) => s.getItemCount());
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const closeMobile = useCallback(() => setMobileOpen(false), []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const fetchCount = () => {
+      api
+        .get<{ data: { count: number } }>("/notifications/unread-count")
+        .then((res) => setUnreadCount(res.data.data.count))
+        .catch(() => {});
+    };
+    fetchCount();
+    const interval = setInterval(fetchCount, 30000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
 
   // Close mobile menu on Escape
   useEffect(() => {
@@ -98,6 +113,21 @@ export default function Navbar() {
 
               {isAuthenticated ? (
                 <div className="flex items-center gap-2">
+                  <Link
+                    href="/notifications"
+                    className="relative p-2 text-gray-600 hover:text-gray-900 transition-colors"
+                    aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}
+                  >
+                    <Bell className="w-5 h-5" aria-hidden="true" />
+                    {unreadCount > 0 && (
+                      <span
+                        className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center"
+                        aria-hidden="true"
+                      >
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                      </span>
+                    )}
+                  </Link>
                   <Link
                     href="/profile"
                     className="p-2 text-gray-600 hover:text-gray-900"

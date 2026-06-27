@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -13,12 +14,19 @@ import {
   ChevronRight,
   Ruler,
   Package,
+  X,
+  ZoomIn,
+  Check,
+  Star,
 } from "lucide-react";
 import api from "@/lib/api";
-import type { Product } from "@/types/product";
+import type { Product, ProductListItem } from "@/types/product";
+import ProductCard from "@/components/catalog/ProductCard";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils";
+import { useCartStore } from "@/store/cartStore";
+import { useAuthStore } from "@/store/authStore";
 
 const BODY_TYPE_LABELS: Record<string, string> = {
   HOURGLASS: "Hourglass",
@@ -56,6 +64,12 @@ export default function ProductDetailPage() {
   const router = useRouter();
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [imageIdx, setImageIdx] = useState(0);
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+  const [showSizeChart, setShowSizeChart] = useState(false);
+  const [addedToCart, setAddedToCart] = useState(false);
+  const { recentlyViewed, addProduct } = useRecentlyViewed();
+  const { addItem, addToServer, isSynced } = useCartStore();
+  const { user } = useAuthStore();
 
   const { data: product, isLoading, error } = useQuery<Product>({
     queryKey: ["product", params.id],
@@ -63,6 +77,69 @@ export default function ProductDetailPage() {
       const res = await api.get<{ data: Product }>(`/products/${params.id}`);
       return res.data.data;
     },
+  });
+
+  useEffect(() => {
+    if (product) {
+      addProduct({
+        id: product.id,
+        name: product.name,
+        slug: product.slug,
+        price: product.price,
+        currency: product.currency,
+        primaryImageUrl: product.images[0] ?? null,
+        brandName: product.brandName,
+      });
+    }
+  }, [product, addProduct]);
+
+  const { data: relatedProducts } = useQuery<ProductListItem[]>({
+    queryKey: ["related-products", params.id],
+    queryFn: async () => {
+      const res = await api.get<{ data: ProductListItem[] }>(`/products/${params.id}/related`);
+      return res.data.data;
+    },
+    enabled: !!product,
+  });
+
+  interface SizeChartRow {
+    size: string;
+    bustMin: number | null; bustMax: number | null;
+    waistMin: number | null; waistMax: number | null;
+    hipsMin: number | null; hipsMax: number | null;
+  }
+
+  const { data: sizeChartData } = useQuery<{ sizes: string[]; chart: SizeChartRow[] }>({
+    queryKey: ["size-chart", params.id],
+    queryFn: async () => {
+      const res = await api.get<{ data: { sizes: string[]; chart: SizeChartRow[] } }>(`/products/${params.id}/size-chart`);
+      return res.data.data;
+    },
+    enabled: showSizeChart,
+  });
+
+  interface ReviewData {
+    items: Array<{
+      id: string;
+      rating: number;
+      title: string | null;
+      comment: string | null;
+      reply: string | null;
+      userName: string;
+      userAvatar: string | null;
+      createdAt: string;
+    }>;
+    averageRating: number;
+    totalReviews: number;
+  }
+
+  const { data: reviewsData } = useQuery<ReviewData>({
+    queryKey: ["product-reviews", product?.id],
+    queryFn: async () => {
+      const res = await api.get<{ data: ReviewData }>(`/reviews/product/${product!.id}?pageSize=5`);
+      return res.data.data;
+    },
+    enabled: !!product,
   });
 
   if (isLoading) return <ProductSkeleton />;
@@ -110,7 +187,10 @@ export default function ProductDetailPage() {
         {/* ── Image gallery ──────────────────────────────────────────────────── */}
         <div className="space-y-3">
           {/* Main image */}
-          <div className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-gray-50">
+          <div
+            className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-gray-50 cursor-zoom-in"
+            onClick={() => currentImage && setZoomedImage(currentImage)}
+          >
             {currentImage ? (
               <Image
                 src={currentImage}
@@ -123,6 +203,11 @@ export default function ProductDetailPage() {
             ) : (
               <div className="w-full h-full flex items-center justify-center text-gray-300">
                 <ShoppingBag className="w-16 h-16" />
+              </div>
+            )}
+            {currentImage && (
+              <div className="absolute bottom-3 left-3 bg-black/50 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                <ZoomIn className="w-3 h-3" /> Click to zoom
               </div>
             )}
 
@@ -221,7 +306,10 @@ export default function ProductDetailPage() {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-sm font-semibold text-gray-900">Select Size</p>
-                <button className="text-xs text-purple-600 flex items-center gap-1 hover:underline">
+                <button
+                  onClick={() => setShowSizeChart(true)}
+                  className="text-xs text-purple-600 flex items-center gap-1 hover:underline"
+                >
                   <Ruler className="h-3 w-3" />
                   Size guide
                 </button>
@@ -267,9 +355,38 @@ export default function ProductDetailPage() {
             <Button
               className="flex-1"
               disabled={product.sizes.length > 0 && !selectedSize}
+              onClick={() => {
+                if (!product || (product.sizes.length > 0 && !selectedSize)) return;
+                const size = selectedSize ?? "ONE_SIZE";
+                if (user && isSynced) {
+                  addToServer(product.id, size, 1);
+                } else {
+                  addItem({
+                    productId: product.id,
+                    productName: product.name,
+                    productImage: product.images[0] ?? null,
+                    brandName: product.brandName,
+                    size,
+                    quantity: 1,
+                    unitPrice: product.price,
+                    currency: product.currency,
+                  });
+                }
+                setAddedToCart(true);
+                setTimeout(() => setAddedToCart(false), 2000);
+              }}
             >
-              <ShoppingBag className="h-4 w-4 mr-2" />
-              {product.sizes.length > 0 && !selectedSize ? "Select a size" : "Add to Cart"}
+              {addedToCart ? (
+                <>
+                  <Check className="h-4 w-4 mr-2" />
+                  Added!
+                </>
+              ) : (
+                <>
+                  <ShoppingBag className="h-4 w-4 mr-2" />
+                  {product.sizes.length > 0 && !selectedSize ? "Select a size" : "Add to Cart"}
+                </>
+              )}
             </Button>
 
             {product.isTryonEnabled && (
@@ -289,6 +406,163 @@ export default function ProductDetailPage() {
           </p>
         </div>
       </div>
+
+      {/* ── Reviews ────────────────────────────────────────────────────── */}
+      {reviewsData && reviewsData.totalReviews > 0 && (
+        <div className="mt-12">
+          <div className="flex items-center gap-3 mb-6">
+            <h2 className="text-lg font-semibold text-gray-900">Customer Reviews</h2>
+            <div className="flex items-center gap-1">
+              <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />
+              <span className="font-semibold">{reviewsData.averageRating.toFixed(1)}</span>
+              <span className="text-sm text-gray-500">({reviewsData.totalReviews} reviews)</span>
+            </div>
+          </div>
+          <div className="space-y-4">
+            {reviewsData.items.map((review) => (
+              <div key={review.id} className="border rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center gap-0.5">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Star
+                        key={star}
+                        className={`w-4 h-4 ${
+                          star <= review.rating
+                            ? "fill-yellow-400 text-yellow-400"
+                            : "text-gray-300"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-sm font-medium text-gray-900">{review.userName}</span>
+                  <span className="text-xs text-gray-400">
+                    {new Date(review.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+                {review.title && (
+                  <p className="font-medium text-gray-900 mb-1">{review.title}</p>
+                )}
+                {review.comment && (
+                  <p className="text-sm text-gray-700">{review.comment}</p>
+                )}
+                {review.reply && (
+                  <div className="bg-gray-50 rounded-md p-3 mt-2">
+                    <p className="text-xs font-medium text-gray-500 mb-1">Brand reply</p>
+                    <p className="text-sm text-gray-700">{review.reply}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Related Products ────────────────────────────────────────────── */}
+      {relatedProducts && relatedProducts.length > 0 && (
+        <div className="mt-12">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">You might also like</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {relatedProducts.slice(0, 4).map((p) => (
+              <ProductCard key={p.id} product={p} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Recently Viewed ────────────────────────────────────────────── */}
+      {recentlyViewed.filter((p) => p.id !== product.id).length > 0 && (
+        <div className="mt-12">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Recently Viewed</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {recentlyViewed
+              .filter((p) => p.id !== product.id)
+              .slice(0, 4)
+              .map((p) => (
+                <ProductCard
+                  key={p.id}
+                  product={{
+                    ...p,
+                    sizes: [],
+                    gender: null,
+                    garmentType: null,
+                    isTryonEnabled: false,
+                    suitableBodyTypes: [],
+                  }}
+                />
+              ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Image Zoom Modal ─────────────────────────────────────────────── */}
+      {zoomedImage && (
+        <div
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          onClick={() => setZoomedImage(null)}
+        >
+          <button
+            className="absolute top-4 right-4 text-white hover:text-gray-300"
+            onClick={() => setZoomedImage(null)}
+          >
+            <X className="h-6 w-6" />
+          </button>
+          <div className="relative max-w-3xl max-h-[90vh] w-full aspect-[3/4]">
+            <Image
+              src={zoomedImage}
+              alt={product.name}
+              fill
+              className="object-contain"
+              sizes="100vw"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── Size Chart Modal ─────────────────────────────────────────────── */}
+      {showSizeChart && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowSizeChart(false)}>
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[80vh] overflow-auto p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Size Guide</h3>
+              <button onClick={() => setShowSizeChart(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {sizeChartData?.chart && sizeChartData.chart.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-2 px-3 font-semibold text-gray-700">Size</th>
+                      <th className="text-left py-2 px-3 font-semibold text-gray-700">Bust (cm)</th>
+                      <th className="text-left py-2 px-3 font-semibold text-gray-700">Waist (cm)</th>
+                      <th className="text-left py-2 px-3 font-semibold text-gray-700">Hips (cm)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sizeChartData.chart.map((row) => (
+                      <tr key={row.size} className="border-b last:border-0">
+                        <td className="py-2 px-3 font-medium">{row.size}</td>
+                        <td className="py-2 px-3 text-gray-600">
+                          {row.bustMin && row.bustMax ? `${row.bustMin}-${row.bustMax}` : "—"}
+                        </td>
+                        <td className="py-2 px-3 text-gray-600">
+                          {row.waistMin && row.waistMax ? `${row.waistMin}-${row.waistMax}` : "—"}
+                        </td>
+                        <td className="py-2 px-3 text-gray-600">
+                          {row.hipsMin && row.hipsMax ? `${row.hipsMin}-${row.hipsMax}` : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">No size chart available for this brand.</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

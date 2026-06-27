@@ -17,10 +17,13 @@ import {
   ShoppingBag,
   MapPin,
   CreditCard,
+  Star,
+  RefreshCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import api from "@/lib/api";
 import { formatCurrency, formatDate, getStatusColor } from "@/lib/utils";
@@ -83,6 +86,15 @@ export default function OrderDetailPage() {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [reordering, setReordering] = useState(false);
+  const [reorderSuccess, setReorderSuccess] = useState(false);
+
+  const [reviewProductId, setReviewProductId] = useState<string | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewTitle, setReviewTitle] = useState("");
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewedProducts, setReviewedProducts] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     api
@@ -120,6 +132,41 @@ export default function OrderDetailPage() {
     } catch {
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleReorder() {
+    if (!order) return;
+    setReordering(true);
+    try {
+      await api.post(`/orders/${order.id}/reorder`);
+      setReorderSuccess(true);
+      setTimeout(() => setReorderSuccess(false), 3000);
+    } catch {
+    } finally {
+      setReordering(false);
+    }
+  }
+
+  async function handleSubmitReview() {
+    if (!order || !reviewProductId) return;
+    setReviewSubmitting(true);
+    try {
+      await api.post("/reviews", {
+        productId: reviewProductId,
+        orderId: order.id,
+        rating: reviewRating,
+        title: reviewTitle.trim() || undefined,
+        comment: reviewComment.trim() || undefined,
+      });
+      setReviewedProducts((prev) => new Set(prev).add(reviewProductId));
+      setReviewProductId(null);
+      setReviewRating(5);
+      setReviewTitle("");
+      setReviewComment("");
+    } catch {
+    } finally {
+      setReviewSubmitting(false);
     }
   }
 
@@ -196,6 +243,22 @@ export default function OrderDetailPage() {
                 Return
               </Button>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={handleReorder}
+              disabled={reordering}
+            >
+              {reordering ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : reorderSuccess ? (
+                <CheckCircle2 className="w-4 h-4 text-green-500" />
+              ) : (
+                <RefreshCcw className="w-4 h-4" />
+              )}
+              {reorderSuccess ? "Added to Cart!" : "Reorder"}
+            </Button>
           </div>
         </div>
 
@@ -312,7 +375,8 @@ export default function OrderDetailPage() {
                 <h3 className="font-semibold text-gray-900 mb-4">Items</h3>
                 <div className="space-y-4">
                   {order.items.map((item) => (
-                    <div key={item.id} className="flex items-center gap-4">
+                    <div key={item.id}>
+                    <div className="flex items-center gap-4">
                       <div className="relative w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
                         {item.productImage ? (
                           <Image
@@ -338,9 +402,79 @@ export default function OrderDetailPage() {
                           Size: {item.size} &times; {item.quantity}
                         </p>
                       </div>
-                      <p className="font-semibold text-gray-900">
-                        {formatCurrency(item.priceAtTime * item.quantity, order.currency)}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-gray-900">
+                          {formatCurrency(item.priceAtTime * item.quantity, order.currency)}
+                        </p>
+                        {canReturn && !reviewedProducts.has(item.productId) && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-purple-600 hover:text-purple-700 gap-1"
+                            onClick={() => setReviewProductId(item.productId)}
+                          >
+                            <Star className="w-3.5 h-3.5" />
+                            Review
+                          </Button>
+                        )}
+                        {reviewedProducts.has(item.productId) && (
+                          <Badge className="bg-green-100 text-green-700 text-xs">Reviewed</Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    {reviewProductId === item.productId && (
+                      <div className="ml-20 mt-2 p-4 bg-gray-50 rounded-lg border">
+                        <div className="flex items-center gap-1 mb-3">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              onClick={() => setReviewRating(star)}
+                              className="focus:outline-none"
+                            >
+                              <Star
+                                className={`w-5 h-5 ${
+                                  star <= reviewRating
+                                    ? "fill-yellow-400 text-yellow-400"
+                                    : "text-gray-300"
+                                }`}
+                              />
+                            </button>
+                          ))}
+                        </div>
+                        <Input
+                          placeholder="Review title (optional)"
+                          value={reviewTitle}
+                          onChange={(e) => setReviewTitle(e.target.value)}
+                          className="mb-2"
+                        />
+                        <Textarea
+                          placeholder="Write your review..."
+                          value={reviewComment}
+                          onChange={(e) => setReviewComment(e.target.value)}
+                          rows={2}
+                          className="mb-3"
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            className="bg-purple-600 hover:bg-purple-700"
+                            onClick={handleSubmitReview}
+                            disabled={reviewSubmitting}
+                          >
+                            {reviewSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />}
+                            Submit Review
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setReviewProductId(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                     </div>
                   ))}
                 </div>

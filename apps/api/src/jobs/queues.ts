@@ -17,7 +17,7 @@ export interface TryOnJobData {
 }
 
 export interface EmailJobData {
-  type: "order_confirmation" | "order_status_update" | "return_request_update" | "password_reset" | "try_on_complete";
+  type: "order_confirmation" | "order_status_update" | "return_request_update" | "password_reset" | "try_on_complete" | "order_receipt" | "refund_confirmation" | "price_alert";
   to: string;
   payload: Record<string, unknown>;
 }

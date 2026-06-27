@@ -29,6 +29,10 @@ model User {
   role                Role                 @default(CUSTOMER)
   brandId             String?
   brand               Brand?               @relation("BrandMembers", fields: [brandId], references: [id])
+  emailMarketing      Boolean              @default(true)
+  emailOrders         Boolean              @default(true)
+  emailTryOn          Boolean              @default(true)
+  pushEnabled         Boolean              @default(false)
   createdAt           DateTime             @default(now())
   bodyProfile         BodyProfile?
   styleProfile        StyleProfile?
@@ -39,23 +43,52 @@ model User {
   conversations       Conversation[]
   wardrobeCollections WardrobeCollection[]
   returnRequests      ReturnRequest[]
+  addresses           Address[]
+  priceAlerts         PriceAlert[]
+  brandFollows        BrandFollow[]
+  reviews             Review[]
+  notifications       Notification[]
 }
 
 model BodyProfile {
-  id        String    @id @default(cuid())
-  userId    String    @unique
-  user      User      @relation(fields: [userId], references: [id])
-  height    Float?
-  weight    Float?
-  bust      Float?
-  waist     Float?
-  hips      Float?
-  shoulders Float?
-  bodyType  BodyType?
-  photoUrl  String?
-  updatedAt DateTime  @updatedAt
+  id                   String               @id @default(cuid())
+  userId               String               @unique
+  user                 User                 @relation(fields: [userId], references: [id])
+  height               Float?
+  weight               Float?
+  bust                 Float?
+  waist                Float?
+  hips                 Float?
+  shoulders            Float?
+  bodyType             BodyType?
+  photoUrl             String?
+  overallConfidence     Float?
+  heightConfidence      Float?
+  bustConfidence        Float?
+  waistConfidence       Float?
+  hipsConfidence        Float?
+  shouldersConfidence   Float?
+  updatedAt            DateTime             @updatedAt
+  measurementHistory   MeasurementHistory[]
 
   @@index([userId])
+}
+
+model MeasurementHistory {
+  id            String      @id @default(cuid())
+  bodyProfileId String
+  bodyProfile   BodyProfile @relation(fields: [bodyProfileId], references: [id], onDelete: Cascade)
+  height        Float?
+  weight        Float?
+  bust          Float?
+  waist         Float?
+  hips          Float?
+  shoulders     Float?
+  bodyType      BodyType?
+  source        String      @default("ai_estimated")
+  createdAt     DateTime    @default(now())
+
+  @@index([bodyProfileId, createdAt])
 }
 
 model StyleProfile {
@@ -72,14 +105,15 @@ model StyleProfile {
 }
 
 model Brand {
-  id             String      @id @default(cuid())
+  id             String        @id @default(cuid())
   name           String
   logo           String?
-  commissionRate Float       @default(0.10)
-  isVerified     Boolean     @default(false)
+  commissionRate Float         @default(0.10)
+  isVerified     Boolean       @default(false)
   products       Product[]
   sizeCharts     SizeChart[]
-  members        User[]      @relation("BrandMembers")
+  members        User[]        @relation("BrandMembers")
+  followers      BrandFollow[]
 }
 
 model SizeChart {
@@ -121,6 +155,9 @@ model Product {
   orderItems        OrderItem[]
   cartItems         CartItem[]
   wardrobeItems     WardrobeItem[]
+  priceAlerts       PriceAlert[]
+  reviews           Review[]
+  variants          ProductVariant[]
 
   @@index([brandId])
   @@index([category])
@@ -145,6 +182,7 @@ model TryOnResult {
   status           String         @default("pending")
   processingTimeMs Int?
   errorMessage     String?
+  qualityRating    Int?
   createdAt        DateTime       @default(now())
   wardrobeItems    WardrobeItem[]
 
@@ -173,9 +211,14 @@ model Order {
   user            User            @relation(fields: [userId], references: [id])
   status          String          @default("pending")
   totalAmount     Float
+  discountAmount  Float           @default(0)
   currency        String          @default("NPR")
   paymentMethod   String?
   paymentRef      String?
+  refundAmount    Float?
+  refundRef       String?
+  discountCodeId  String?
+  discountCode    DiscountCode?   @relation(fields: [discountCodeId], references: [id])
   shippingAddress Json?
   items           OrderItem[]
   returnRequests  ReturnRequest[]
@@ -269,6 +312,129 @@ model ReturnRequest {
 
   @@index([orderId])
   @@index([userId])
+}
+
+// ─── Reviews & Ratings ───────────────────────────────────────────────────────
+
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderId   String?
+  rating    Int
+  title     String?
+  comment   String?
+  reply     String?
+  repliedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, productId, orderId])
+  @@index([productId])
+  @@index([userId])
+}
+
+// ─── Product Variants (Inventory) ────────────────────────────────────────────
+
+model ProductVariant {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  size      String
+  stock     Int     @default(0)
+
+  @@unique([productId, size])
+  @@index([productId])
+}
+
+// ─── In-App Notifications ────────────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String
+  data      Json?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+}
+
+// ─── Address Book ────────────────────────────────────────────────────────────
+
+model Address {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label     String   @default("Home")
+  fullName  String
+  phone     String
+  street    String
+  city      String
+  district  String
+  province  String?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// ─── Discount / Promo Codes ──────────────────────────────────────────────────
+
+model DiscountCode {
+  id             String   @id @default(cuid())
+  code           String   @unique
+  description    String?
+  discountType   String   @default("percentage")
+  discountValue  Float
+  minOrderAmount Float?
+  maxUses        Int?
+  currentUses    Int      @default(0)
+  isActive       Boolean  @default(true)
+  expiresAt      DateTime?
+  createdAt      DateTime @default(now())
+  orders         Order[]
+
+  @@index([code])
+}
+
+// ─── Wishlist Price Alerts ───────────────────────────────────────────────────
+
+model PriceAlert {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  targetPrice  Float
+  isTriggered  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@index([productId])
+}
+
+// ─── Brand Follows ───────────────────────────────────────────────────────────
+
+model BrandFollow {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brandId   String
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, brandId])
+  @@index([userId])
+  @@index([brandId])
 }
 
 // ─── SaaS / API Key Management ───────────────────────────────────────────────

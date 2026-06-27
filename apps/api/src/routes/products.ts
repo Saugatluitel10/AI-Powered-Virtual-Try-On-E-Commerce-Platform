@@ -18,6 +18,7 @@ router.get("/", cacheResponse(300, "products"), async (req: Request, res) => {
       maxPrice,
       size,
       bodyType,
+      brand,
       isTryonEnabled,
       sort = "newest",
       page = "1",
@@ -56,6 +57,7 @@ router.get("/", cacheResponse(300, "products"), async (req: Request, res) => {
     if (gender) where.gender = gender;
     if (size) where.sizes = { has: size };
     if (bodyType) where.suitableBodyTypes = { has: bodyType.toUpperCase() };
+    if (brand) where.brand = { name: { contains: brand, mode: "insensitive" } };
     if (isTryonEnabled === "true") where.isTryonEnabled = true;
 
     const priceFilter: Record<string, number> = {};
@@ -172,6 +174,191 @@ router.get("/:id/size-recommendation", verifyJwt, async (req: AuthRequest, res) 
     return res.json({ data: recommendation });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error generating size recommendation";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── GET /api/v1/products/search/autocomplete ───────────────────────────────
+router.get("/search/autocomplete", async (req: Request, res) => {
+  try {
+    const q = (req.query.q as string || "").trim();
+    if (q.length < 2) return res.json({ data: [] });
+
+    const products = await prisma.product.findMany({
+      where: {
+        isActive: true,
+        name: { contains: q, mode: "insensitive" },
+      },
+      select: { id: true, name: true, slug: true, primaryImageUrl: true },
+      take: 8,
+    });
+
+    return res.json({
+      data: products.map((p: typeof products[number]) => ({
+        id: p.id,
+        name: p.name,
+        slug: p.slug,
+      })),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Autocomplete error";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── GET /api/v1/products/new-arrivals ──────────────────────────────────────
+router.get("/new-arrivals", cacheResponse(600, "products"), async (_req: Request, res) => {
+  try {
+    const products = await prisma.product.findMany({
+      where: { isActive: true },
+      include: { brand: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 12,
+    });
+
+    const items = products.map((p: typeof products[number]) => ({
+      id: p.id,
+      name: p.name,
+      slug: p.slug,
+      price: p.price,
+      currency: p.currency,
+      sizes: p.sizes,
+      gender: p.gender,
+      garmentType: p.garmentType,
+      isTryonEnabled: p.isTryonEnabled,
+      suitableBodyTypes: p.suitableBodyTypes,
+      primaryImageUrl: p.images[0] ?? null,
+      brandName: p.brand?.name ?? null,
+    }));
+
+    return res.json({ data: items });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error fetching new arrivals";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── GET /api/v1/products/:id/related ───────────────────────────────────────
+router.get("/:id/related", cacheResponse(600, "products"), async (req: Request, res) => {
+  try {
+    const product = await prisma.product.findFirst({
+      where: { OR: [{ id: req.params.id as string }, { slug: req.params.id as string }], isActive: true },
+      select: { id: true, category: true, gender: true, garmentType: true, brandId: true },
+    });
+
+    if (!product) return res.status(404).json({ error: "Product not found" });
+
+    const related = await prisma.product.findMany({
+      where: {
+        isActive: true,
+        id: { not: product.id },
+        OR: [
+          { category: product.category },
+          { garmentType: product.garmentType },
+          { brandId: product.brandId },
+        ],
+      },
+      include: { brand: { select: { name: true } } },
+      take: 8,
+    });
+
+    const items = related.map((p: typeof related[number]) => ({
+      id: p.id,
+      name: p.name,
+      slug: p.slug,
+      price: p.price,
+      currency: p.currency,
+      sizes: p.sizes,
+      gender: p.gender,
+      garmentType: p.garmentType,
+      isTryonEnabled: p.isTryonEnabled,
+      suitableBodyTypes: p.suitableBodyTypes,
+      primaryImageUrl: p.images[0] ?? null,
+      brandName: p.brand?.name ?? null,
+    }));
+
+    return res.json({ data: items });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error fetching related products";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── GET /api/v1/products/:id/size-chart ────────────────────────────────────
+router.get("/:id/size-chart", cacheResponse(3600, "products"), async (req: Request, res) => {
+  try {
+    const product = await prisma.product.findFirst({
+      where: { OR: [{ id: req.params.id as string }, { slug: req.params.id as string }], isActive: true },
+      select: { brandId: true, sizes: true },
+    });
+
+    if (!product) return res.status(404).json({ error: "Product not found" });
+
+    const chart = await prisma.sizeChart.findMany({
+      where: { brandId: product.brandId },
+      orderBy: { sortOrder: "asc" },
+      select: {
+        size: true,
+        bustMin: true, bustMax: true,
+        waistMin: true, waistMax: true,
+        hipsMin: true, hipsMax: true,
+      },
+    });
+
+    return res.json({ data: { sizes: product.sizes, chart } });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error fetching size chart";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── GET /api/v1/products/:id/size-comparison ───────────────────────────────
+router.get("/:id/size-comparison", verifyJwt, async (req: AuthRequest, res) => {
+  try {
+    const product = await prisma.product.findFirst({
+      where: { OR: [{ id: req.params.id as string }, { slug: req.params.id as string }], isActive: true },
+      select: { category: true, garmentType: true, gender: true },
+    });
+
+    if (!product) return res.status(404).json({ error: "Product not found" });
+
+    const profile = await prisma.bodyProfile.findUnique({
+      where: { userId: req.userId! },
+      select: { bust: true, waist: true, hips: true },
+    });
+
+    if (!profile) {
+      return res.status(400).json({ error: "Body profile required for size comparison." });
+    }
+
+    const similarProducts = await prisma.product.findMany({
+      where: {
+        isActive: true,
+        category: product.category,
+        gender: product.gender,
+      },
+      include: {
+        brand: { select: { id: true, name: true } },
+      },
+      take: 10,
+    });
+
+    const comparisons = await Promise.all(
+      similarProducts.map(async (p: typeof similarProducts[number]) => {
+        const rec = await recommendSize(req.userId!, p.id);
+        return rec ? {
+          productId: p.id,
+          productName: p.name,
+          brandName: p.brand?.name ?? null,
+          recommendedSize: rec.recommendedSize,
+          confidence: rec.confidence,
+        } : null;
+      })
+    );
+
+    return res.json({ data: comparisons.filter(Boolean) });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error generating size comparison";
     return res.status(500).json({ error: message });
   }
 });

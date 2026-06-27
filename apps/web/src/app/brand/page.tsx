@@ -17,6 +17,9 @@ import {
   EyeOff,
   ChevronDown,
   ChevronUp,
+  Star,
+  MessageSquare,
+  Boxes,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,7 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 import api from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 
-type Tab = "dashboard" | "products" | "sales" | "commission";
+type Tab = "dashboard" | "products" | "sales" | "commission" | "reviews" | "inventory";
 
 interface DashboardData {
   productCount: number;
@@ -86,14 +89,39 @@ interface CommissionData {
   }>;
 }
 
+interface ReviewItem {
+  id: string;
+  rating: number;
+  title: string | null;
+  comment: string | null;
+  reply: string | null;
+  repliedAt: string | null;
+  userName: string;
+  productName: string;
+  createdAt: string;
+}
+
+interface InventoryItem {
+  id: string;
+  name: string;
+  variants: Array<{ size: string; stock: number }>;
+}
+
 export default function BrandPortalPage() {
   const [tab, setTab] = useState<Tab>("dashboard");
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [products, setProducts] = useState<ProductData[]>([]);
   const [sales, setSales] = useState<SaleItem[]>([]);
   const [commission, setCommission] = useState<CommissionData | null>(null);
+  const [reviews, setReviews] = useState<ReviewItem[]>([]);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [replySubmitting, setReplySubmitting] = useState(false);
+  const [stockEdits, setStockEdits] = useState<Record<string, Record<string, string>>>({});
 
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<string | null>(null);
@@ -134,6 +162,12 @@ export default function BrandPortalPage() {
       } else if (t === "commission") {
         const res = await api.get<{ data: CommissionData }>("/brand/commission");
         setCommission(res.data.data);
+      } else if (t === "reviews") {
+        const res = await api.get<{ data: { items: ReviewItem[] } }>("/brand/reviews?pageSize=50");
+        setReviews(res.data.data.items);
+      } else if (t === "inventory") {
+        const res = await api.get<{ data: { items: InventoryItem[] } }>("/brand/inventory?pageSize=50");
+        setInventory(res.data.data.items);
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to load data";
@@ -248,6 +282,8 @@ export default function BrandPortalPage() {
     { key: "products", label: "Products", icon: <Package className="w-4 h-4" /> },
     { key: "sales", label: "Sales", icon: <ShoppingCart className="w-4 h-4" /> },
     { key: "commission", label: "Commission", icon: <DollarSign className="w-4 h-4" /> },
+    { key: "reviews", label: "Reviews", icon: <MessageSquare className="w-4 h-4" /> },
+    { key: "inventory", label: "Inventory", icon: <Boxes className="w-4 h-4" /> },
   ];
 
   return (
@@ -604,6 +640,178 @@ export default function BrandPortalPage() {
                     )}
                   </CardContent>
                 </Card>
+              </div>
+            )}
+            {/* Reviews Tab */}
+            {tab === "reviews" && (
+              <Card>
+                <CardContent className="p-6">
+                  <h3 className="font-semibold text-gray-900 mb-4">Customer Reviews</h3>
+                  {reviews.length === 0 ? (
+                    <p className="text-gray-500 text-center py-8">No reviews yet.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {reviews.map((r) => (
+                        <div key={r.id} className="border rounded-lg p-4">
+                          <div className="flex items-start justify-between mb-2">
+                            <div>
+                              <div className="flex items-center gap-1 mb-1">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <Star
+                                    key={star}
+                                    className={`w-4 h-4 ${
+                                      star <= r.rating
+                                        ? "fill-yellow-400 text-yellow-400"
+                                        : "text-gray-300"
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+                              {r.title && (
+                                <p className="font-medium text-gray-900">{r.title}</p>
+                              )}
+                            </div>
+                            <div className="text-right text-xs text-gray-500">
+                              <p>{r.productName}</p>
+                              <p>{new Date(r.createdAt).toLocaleDateString()}</p>
+                            </div>
+                          </div>
+                          {r.comment && (
+                            <p className="text-sm text-gray-700 mb-2">{r.comment}</p>
+                          )}
+                          <p className="text-xs text-gray-500 mb-2">— {r.userName}</p>
+
+                          {r.reply ? (
+                            <div className="bg-gray-50 rounded-md p-3 mt-2">
+                              <p className="text-xs font-medium text-gray-500 mb-1">Your reply</p>
+                              <p className="text-sm text-gray-700">{r.reply}</p>
+                            </div>
+                          ) : (
+                            <>
+                              {replyingTo === r.id ? (
+                                <div className="mt-2">
+                                  <Textarea
+                                    placeholder="Write a reply..."
+                                    value={replyText}
+                                    onChange={(e) => setReplyText(e.target.value)}
+                                    rows={2}
+                                    className="mb-2"
+                                  />
+                                  <div className="flex gap-2">
+                                    <Button
+                                      size="sm"
+                                      className="bg-purple-600 hover:bg-purple-700"
+                                      disabled={replySubmitting || !replyText.trim()}
+                                      onClick={async () => {
+                                        setReplySubmitting(true);
+                                        try {
+                                          await api.post(`/brand/reviews/${r.id}/reply`, {
+                                            reply: replyText.trim(),
+                                          });
+                                          setReplyingTo(null);
+                                          setReplyText("");
+                                          loadTab("reviews");
+                                        } catch {
+                                        } finally {
+                                          setReplySubmitting(false);
+                                        }
+                                      }}
+                                    >
+                                      {replySubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />}
+                                      Reply
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => { setReplyingTo(null); setReplyText(""); }}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-purple-600 mt-1"
+                                  onClick={() => setReplyingTo(r.id)}
+                                >
+                                  <MessageSquare className="w-3.5 h-3.5 mr-1" />
+                                  Reply
+                                </Button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Inventory Tab */}
+            {tab === "inventory" && (
+              <div className="space-y-4">
+                {inventory.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">No products found.</div>
+                ) : (
+                  inventory.map((item) => (
+                    <Card key={item.id}>
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <p className="font-medium text-gray-900">{item.name}</p>
+                          <Button
+                            size="sm"
+                            className="bg-purple-600 hover:bg-purple-700"
+                            onClick={async () => {
+                              const edits = stockEdits[item.id];
+                              if (!edits) return;
+                              const variants = Object.entries(edits).map(([size, stock]) => ({
+                                size,
+                                stock: parseInt(stock) || 0,
+                              }));
+                              try {
+                                await api.patch(`/brand/inventory/${item.id}`, { variants });
+                                loadTab("inventory");
+                                setStockEdits((prev) => {
+                                  const next = { ...prev };
+                                  delete next[item.id];
+                                  return next;
+                                });
+                              } catch {}
+                            }}
+                            disabled={!stockEdits[item.id]}
+                          >
+                            Save
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                          {item.variants.map((v) => (
+                            <div key={v.size} className="border rounded-md p-2">
+                              <p className="text-xs font-medium text-gray-500 mb-1">{v.size}</p>
+                              <Input
+                                type="number"
+                                min="0"
+                                className="h-8 text-sm"
+                                defaultValue={v.stock}
+                                onChange={(e) => {
+                                  setStockEdits((prev) => ({
+                                    ...prev,
+                                    [item.id]: {
+                                      ...(prev[item.id] ?? {}),
+                                      [v.size]: e.target.value,
+                                    },
+                                  }));
+                                }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
               </div>
             )}
           </>
