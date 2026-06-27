@@ -92,6 +92,136 @@ router.get("/dashboard", async (_req: AuthRequest, res) => {
   }
 });
 
+// ─── PATCH /api/v1/admin/orders/:id/status ───────────────────────────────────
+router.patch("/orders/:id/status", async (req: AuthRequest, res) => {
+  try {
+    const { status, trackingNumber } = req.body as {
+      status?: string;
+      trackingNumber?: string;
+    };
+
+    const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+      pending: ["confirmed", "cancelled"],
+      confirmed: ["processing", "cancelled"],
+      processing: ["shipped", "cancelled"],
+      shipped: ["delivered"],
+      delivered: [],
+      cancelled: [],
+      refund_requested: ["refunded"],
+      refunded: [],
+    };
+
+    if (!status) {
+      return res.status(400).json({ error: "status is required." });
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { id: req.params.id as string },
+      include: { user: { select: { email: true } } },
+    });
+
+    if (!order) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    const allowed = ALLOWED_TRANSITIONS[order.status] ?? [];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({
+        error: `Cannot transition from "${order.status}" to "${status}". Allowed: ${allowed.join(", ") || "none"}.`,
+      });
+    }
+
+    const updateData: Record<string, unknown> = { status };
+    if (trackingNumber && status === "shipped") {
+      updateData.trackingNumber = trackingNumber;
+    }
+
+    const updated = await prisma.order.update({
+      where: { id: order.id },
+      data: updateData,
+    });
+
+    await enqueueEmail({
+      type: "order_status_update",
+      to: order.user.email,
+      payload: { orderId: order.id, status },
+    });
+
+    return res.json({
+      data: {
+        id: updated.id,
+        status: updated.status,
+        trackingNumber: updated.trackingNumber,
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error updating order status";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── GET /api/v1/admin/orders ───────────────────────────────────────────────
+router.get("/orders", async (req: AuthRequest, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize as string) || 20));
+    const statusFilter = req.query.status as string | undefined;
+
+    const where = statusFilter ? { status: statusFilter } : {};
+
+    const [total, orders] = await Promise.all([
+      prisma.order.count({ where }),
+      prisma.order.findMany({
+        where,
+        include: {
+          user: { select: { name: true, email: true } },
+          items: {
+            include: { product: { select: { name: true, images: true } } },
+          },
+          _count: { select: { returnRequests: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+
+    return res.json({
+      data: {
+        items: orders.map((o: typeof orders[number]) => ({
+          id: o.id,
+          status: o.status,
+          totalAmount: o.totalAmount,
+          currency: o.currency,
+          paymentMethod: o.paymentMethod,
+          paymentRef: o.paymentRef,
+          trackingNumber: o.trackingNumber,
+          customerName: o.user.name ?? o.user.email,
+          customerEmail: o.user.email,
+          itemCount: o.items.length,
+          items: o.items.map((i: typeof o.items[number]) => ({
+            productName: i.product.name,
+            productImage: i.product.images[0] ?? null,
+            size: i.size,
+            quantity: i.quantity,
+            priceAtTime: i.priceAtTime,
+          })),
+          returnRequestCount: o._count.returnRequests,
+          createdAt: o.createdAt.toISOString(),
+          updatedAt: o.updatedAt.toISOString(),
+        })),
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error fetching orders";
+    return res.status(500).json({ error: message });
+  }
+});
+
 // ─── PATCH /api/v1/admin/brands/:id/verify ──────────────────────────────────
 router.patch("/brands/:id/verify", async (req: AuthRequest, res) => {
   try {
