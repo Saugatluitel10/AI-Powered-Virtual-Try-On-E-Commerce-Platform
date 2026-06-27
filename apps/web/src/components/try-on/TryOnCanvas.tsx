@@ -14,11 +14,14 @@ import {
   ThumbsUp,
   ThumbsDown,
   GripVertical,
+  Shirt,
+  ShoppingCart,
 } from "lucide-react";
 import type { TryOnSession } from "@/types/order";
 import { Button } from "@/components/ui/button";
 import api from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useCartStore } from "@/store/cartStore";
 
 interface TryOnCanvasProps {
   session: TryOnSession | null;
@@ -103,6 +106,11 @@ export default function TryOnCanvas({ session, isLoading, userPhotoUrl }: TryOnC
   const [zoom, setZoom] = useState(1);
   const [showComparison, setShowComparison] = useState(false);
   const [feedback, setFeedback] = useState<1 | -1 | null>(null);
+  const [showSizeSelect, setShowSizeSelect] = useState(false);
+  const [selectedSize, setSelectedSize] = useState<string>("");
+  const [productSizes, setProductSizes] = useState<string[]>([]);
+  const [addedToCart, setAddedToCart] = useState(false);
+  const { addToServer } = useCartStore();
 
   async function handleDownload() {
     if (!session?.resultImageUrl) return;
@@ -297,6 +305,88 @@ export default function TryOnCanvas({ session, isLoading, userPhotoUrl }: TryOnC
             <Share2 className="h-3.5 w-3.5 mr-1.5" />
             Share
           </Button>
+
+          {/* Save to Wardrobe */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs"
+            onClick={async () => {
+              if (!session) return;
+              try {
+                await api.post("/wardrobe", {
+                  productId: session.productId,
+                  tryOnResultId: session.id,
+                });
+                alert("Saved to wardrobe!");
+              } catch {}
+            }}
+          >
+            <Shirt className="h-3.5 w-3.5 mr-1.5" />
+            Save
+          </Button>
+
+          {/* Add to Cart */}
+          {addedToCart ? (
+            <Button variant="outline" size="sm" className="text-xs text-green-600 border-green-200" disabled>
+              <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
+              Added!
+            </Button>
+          ) : showSizeSelect ? (
+            <div className="flex items-center gap-1">
+              <select
+                value={selectedSize}
+                onChange={(e) => setSelectedSize(e.target.value)}
+                className="h-8 text-xs border rounded px-2"
+              >
+                <option value="">Size</option>
+                {productSizes.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+              <Button
+                size="sm"
+                className="text-xs bg-purple-600 hover:bg-purple-700 h-8"
+                disabled={!selectedSize}
+                onClick={async () => {
+                  if (!session || !selectedSize) return;
+                  try {
+                    await addToServer(session.productId, selectedSize, 1);
+                    setAddedToCart(true);
+                    setShowSizeSelect(false);
+                    setTimeout(() => setAddedToCart(false), 3000);
+                  } catch {}
+                }}
+              >
+                <ShoppingCart className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs"
+              onClick={async () => {
+                if (!session) return;
+                try {
+                  const res = await api.get<{ data: { sizes: string[] } }>(
+                    `/products/${session.productId}`
+                  );
+                  const sizes = res.data.data.sizes ?? ["S", "M", "L", "XL"];
+                  setProductSizes(sizes);
+                  setSelectedSize(session.sizeRecommended ?? sizes[0] ?? "");
+                  setShowSizeSelect(true);
+                } catch {
+                  setProductSizes(["S", "M", "L", "XL"]);
+                  setSelectedSize(session.sizeRecommended ?? "M");
+                  setShowSizeSelect(true);
+                }
+              }}
+            >
+              <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
+              Add to Cart
+            </Button>
+          )}
 
           {/* Feedback */}
           <div className="flex items-center gap-1 border rounded-lg px-1">

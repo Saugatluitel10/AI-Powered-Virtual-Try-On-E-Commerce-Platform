@@ -78,6 +78,19 @@ router.post("/", verifyJwt, async (req: AuthRequest, res) => {
       return res.status(400).json({ error: `Size "${size}" is not available for this product.` });
     }
 
+    const variant = await prisma.productVariant.findUnique({
+      where: { productId_size: { productId, size } },
+    });
+    if (variant && variant.stock > 0) {
+      const existing = await prisma.cartItem.findUnique({
+        where: { userId_productId_size: { userId: req.userId!, productId, size } },
+      });
+      const currentQty = existing?.quantity ?? 0;
+      if (currentQty + quantity > variant.stock) {
+        return res.status(400).json({ error: `Only ${variant.stock} items in stock for this size.` });
+      }
+    }
+
     const item = await prisma.cartItem.upsert({
       where: {
         userId_productId_size: {

@@ -19,8 +19,10 @@ import tenantRoutes from "./routes/tenants";
 import publicApiRoutes from "./routes/publicApi";
 import feedbackRoutes from "./routes/feedback";
 import saasWebhookRoutes from "./routes/saasWebhook";
+import stripeWebhookRoutes from "./routes/stripeWebhook";
 import reviewRoutes from "./routes/reviews";
 import notificationRoutes from "./routes/notifications";
+import wishlistRoutes from "./routes/wishlist";
 
 const app: Express = express();
 
@@ -89,7 +91,9 @@ app.use(`${v1}/public`, publicApiRoutes);
 app.use(`${v1}/feedback`, feedbackRoutes);
 app.use(`${v1}/reviews`, reviewRoutes);
 app.use(`${v1}/notifications`, notificationRoutes);
+app.use(`${v1}/wishlist`, wishlistRoutes);
 app.use(`${v1}/webhooks/saas`, saasWebhookRoutes);
+app.use(`${v1}/webhooks/stripe`, stripeWebhookRoutes);
 
 // ─── 404 ──────────────────────────────────────────────────────────────────────
 app.use((_req, res) => {

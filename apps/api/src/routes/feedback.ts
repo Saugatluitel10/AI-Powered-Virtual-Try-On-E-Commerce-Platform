@@ -24,7 +24,7 @@ router.post("/", verifyJwt, async (req: AuthRequest, res) => {
       select: { email: true, name: true },
     });
 
-    console.log(`[Feedback] type=${type} score=${score ?? "n/a"} user=${user?.email ?? req.userId} comment=${comment ?? ""}`);
+    // Feedback stored via analytics pipeline, not logged to stdout
 
     return res.status(201).json({
       data: {

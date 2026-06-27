@@ -48,6 +48,7 @@ model User {
   brandFollows        BrandFollow[]
   reviews             Review[]
   notifications       Notification[]
+  wishlistItems       WishlistItem[]
 }
 
 model BodyProfile {
@@ -158,6 +159,7 @@ model Product {
   priceAlerts       PriceAlert[]
   reviews           Review[]
   variants          ProductVariant[]
+  wishlistItems     WishlistItem[]
 
   @@index([brandId])
   @@index([category])
@@ -217,6 +219,7 @@ model Order {
   paymentRef      String?
   refundAmount    Float?
   refundRef       String?
+  trackingNumber  String?
   discountCodeId  String?
   discountCode    DiscountCode?   @relation(fields: [discountCodeId], references: [id])
   shippingAddress Json?
@@ -403,6 +406,21 @@ model DiscountCode {
   orders         Order[]
 
   @@index([code])
+}
+
+// ─── Wishlist ────────────────────────────────────────────────────────────────
+
+model WishlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@index([productId])
 }
 
 // ─── Wishlist Price Alerts ───────────────────────────────────────────────────

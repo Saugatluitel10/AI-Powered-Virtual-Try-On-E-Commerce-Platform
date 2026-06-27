@@ -9,7 +9,7 @@ interface UseAuthReturn {
   session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, name: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, name: string) => Promise<{ error: Error | null; confirmationRequired?: boolean }>;
   signOut: () => Promise<void>;
 }
 
@@ -62,7 +62,7 @@ export function useAuth(): UseAuthReturn {
         body: JSON.stringify({ name }),
       });
     }
-    return { error };
+    return { error, confirmationRequired: !error && !data.session };
   }, []);
 
   const signOut = useCallback(async () => {

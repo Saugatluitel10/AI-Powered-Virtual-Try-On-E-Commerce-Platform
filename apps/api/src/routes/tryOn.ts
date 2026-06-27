@@ -44,6 +44,34 @@ router.post("/", verifyJwt, async (req: AuthRequest, res) => {
       return res.status(400).json({ error: "Product has no images." });
     }
 
+    // Check for existing completed result (dedup)
+    const existing = await prisma.tryOnResult.findFirst({
+      where: {
+        userId: req.userId!,
+        productId,
+        status: "completed",
+        userPhotoUrl: bodyProfile.photoUrl,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (existing) {
+      let resultUrl: string | null = null;
+      if (existing.resultImageUrl) {
+        try {
+          resultUrl = await getSignedUrl(BUCKETS.TRYON_RESULTS, existing.resultImageUrl, 3600);
+        } catch {}
+      }
+      return res.json({
+        data: {
+          id: existing.id,
+          status: existing.status,
+          resultImageUrl: resultUrl,
+          cached: true,
+        },
+      });
+    }
+
     // Build signed URLs
     const userPhotoUrl = await getSignedUrl(
       BUCKETS.USER_PHOTOS,

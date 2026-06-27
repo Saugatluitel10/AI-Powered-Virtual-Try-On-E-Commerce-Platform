@@ -96,6 +96,7 @@ router.get("/:id", verifyJwt, async (req: AuthRequest, res) => {
         currency: order.currency,
         paymentMethod: order.paymentMethod,
         paymentRef: order.paymentRef,
+        trackingNumber: order.trackingNumber,
         shippingAddress: order.shippingAddress,
         items: mapOrderItems(order.items),
         returnRequests: order.returnRequests.map((r: { id: string; items: unknown; reason: string; status: string; createdAt: Date }) => ({
@@ -229,6 +230,11 @@ router.post("/", verifyJwt, async (req: AuthRequest, res) => {
       return res.status(400).json({ error: "paymentMethod is required." });
     }
 
+    const VALID_PAYMENT_METHODS = ["esewa", "khalti", "stripe", "cod"];
+    if (!VALID_PAYMENT_METHODS.includes(paymentMethod)) {
+      return res.status(400).json({ error: `paymentMethod must be one of: ${VALID_PAYMENT_METHODS.join(", ")}` });
+    }
+
     const cartItems = await prisma.cartItem.findMany({
       where: { userId: req.userId! },
       include: {
@@ -280,6 +286,21 @@ router.post("/", verifyJwt, async (req: AuthRequest, res) => {
     }));
 
     const order = await prisma.$transaction(async (tx: TransactionClient) => {
+      for (const ci of cartItems) {
+        const variant = await tx.productVariant.findUnique({
+          where: { productId_size: { productId: ci.product.id, size: ci.size } },
+        });
+        if (variant && variant.stock > 0) {
+          if (ci.quantity > variant.stock) {
+            throw new Error(`Insufficient stock for ${ci.product.name} (${ci.size}). Only ${variant.stock} left.`);
+          }
+          await tx.productVariant.update({
+            where: { id: variant.id },
+            data: { stock: { decrement: ci.quantity } },
+          });
+        }
+      }
+
       const created = await tx.order.create({
         data: {
           userId: req.userId!,
@@ -306,6 +327,20 @@ router.post("/", verifyJwt, async (req: AuthRequest, res) => {
 
       return created;
     });
+
+    if (paymentMethod === "cod") {
+      const user = await prisma.user.findUnique({
+        where: { id: req.userId! },
+        select: { email: true },
+      });
+      if (user) {
+        await enqueueEmail({
+          type: "order_confirmation",
+          to: user.email,
+          payload: { orderId: order.id, total: order.totalAmount, currency: order.currency },
+        });
+      }
+    }
 
     return res.status(201).json({
       data: {
@@ -451,12 +486,29 @@ router.post("/:id/refund", verifyJwt, async (req: AuthRequest, res) => {
       return res.status(400).json({ error: "Refund already initiated for this order." });
     }
 
+    let refundRef = `REF-${order.id.slice(0, 8).toUpperCase()}-${Date.now()}`;
+
+    if (order.paymentMethod === "stripe" && order.paymentRef) {
+      try {
+        const Stripe = (await import("stripe")).default;
+        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "");
+        const refund = await stripe.refunds.create({
+          payment_intent: order.paymentRef,
+          amount: Math.round(order.totalAmount * 100),
+        });
+        refundRef = refund.id;
+      } catch (stripeErr) {
+        const msg = stripeErr instanceof Error ? stripeErr.message : "Stripe refund failed";
+        return res.status(500).json({ error: `Refund failed: ${msg}` });
+      }
+    }
+
     const updated = await prisma.order.update({
       where: { id: order.id },
       data: {
         status: "refund_requested",
         refundAmount: order.totalAmount,
-        refundRef: `REF-${order.id.slice(0, 8).toUpperCase()}-${Date.now()}`,
+        refundRef,
       },
     });
 

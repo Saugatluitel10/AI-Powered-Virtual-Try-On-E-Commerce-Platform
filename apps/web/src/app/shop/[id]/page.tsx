@@ -18,6 +18,7 @@ import {
   ZoomIn,
   Check,
   Star,
+  Heart,
 } from "lucide-react";
 import api from "@/lib/api";
 import type { Product, ProductListItem } from "@/types/product";
@@ -67,6 +68,7 @@ export default function ProductDetailPage() {
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   const [showSizeChart, setShowSizeChart] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
+  const [wishlisted, setWishlisted] = useState(false);
   const { recentlyViewed, addProduct } = useRecentlyViewed();
   const { addItem, addToServer, isSynced } = useCartStore();
   const { user } = useAuthStore();
@@ -141,6 +143,30 @@ export default function ProductDetailPage() {
     },
     enabled: !!product,
   });
+
+  interface SizeRec {
+    recommendedSize: string;
+    confidence: number;
+    reasoning: string;
+    fitType: string;
+  }
+
+  const { data: sizeRec } = useQuery<SizeRec>({
+    queryKey: ["size-rec", product?.id],
+    queryFn: async () => {
+      const res = await api.get<{ data: SizeRec }>(`/products/${product!.id}/size-recommendation`);
+      return res.data.data;
+    },
+    enabled: !!product && !!user,
+  });
+
+  useEffect(() => {
+    if (!product || !user) return;
+    api
+      .get<{ data: { wishlisted: boolean } }>(`/wishlist/check/${product.id}`)
+      .then((res) => setWishlisted(res.data.data.wishlisted))
+      .catch(() => {});
+  }, [product, user]);
 
   if (isLoading) return <ProductSkeleton />;
 
@@ -397,7 +423,48 @@ export default function ProductDetailPage() {
                 </Button>
               </Link>
             )}
+
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={async () => {
+                if (!user) return;
+                try {
+                  if (wishlisted) {
+                    await api.delete(`/wishlist/${product.id}`);
+                    setWishlisted(false);
+                  } else {
+                    await api.post("/wishlist", { productId: product.id });
+                    setWishlisted(true);
+                  }
+                } catch {}
+              }}
+              className={wishlisted ? "text-red-500 border-red-200 hover:bg-red-50" : ""}
+            >
+              <Heart className={`h-4 w-4 ${wishlisted ? "fill-red-500" : ""}`} />
+            </Button>
           </div>
+
+          {/* Size Recommendation */}
+          {sizeRec && (
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Ruler className="w-4 h-4 text-purple-600" />
+                <span className="text-sm font-semibold text-purple-900">
+                  Recommended: {sizeRec.recommendedSize}
+                </span>
+                <span className="text-xs bg-purple-200 text-purple-800 rounded-full px-2 py-0.5">
+                  {Math.round(sizeRec.confidence * 100)}% confident
+                </span>
+                {sizeRec.fitType && (
+                  <span className="text-xs bg-gray-200 text-gray-700 rounded-full px-2 py-0.5 capitalize">
+                    {sizeRec.fitType}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-purple-800">{sizeRec.reasoning}</p>
+            </div>
+          )}
 
           {/* Shipping note */}
           <p className="text-xs text-gray-400 flex items-center gap-1.5">

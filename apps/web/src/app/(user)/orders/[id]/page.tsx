@@ -54,6 +54,7 @@ interface OrderDetail {
   currency: string;
   paymentMethod: string | null;
   paymentRef: string | null;
+  trackingNumber: string | null;
   shippingAddress: Record<string, string> | null;
   items: OrderItem[];
   returnRequests: ReturnRequest[];
@@ -551,6 +552,12 @@ export default function OrderDetailPage() {
                     <p>
                       <span className="text-gray-500">Ref: </span>
                       {order.paymentRef}
+                    </p>
+                  )}
+                  {order.trackingNumber && (
+                    <p>
+                      <span className="text-gray-500">Tracking: </span>
+                      <span className="font-medium">{order.trackingNumber}</span>
                     </p>
                   )}
                   <p>
