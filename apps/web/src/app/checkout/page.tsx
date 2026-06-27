@@ -10,6 +10,10 @@ import {
   CreditCard,
   Loader2,
   AlertCircle,
+  Tag,
+  BookMarked,
+  Plus,
+  Check,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -24,7 +28,28 @@ import { formatCurrency } from "@/lib/utils";
 
 const DELIVERY_FEE = 150;
 
-type PaymentMethod = "esewa" | "khalti" | "cod";
+type PaymentMethod = "esewa" | "khalti" | "stripe" | "cod";
+
+interface SavedAddress {
+  id: string;
+  label: string;
+  fullName: string;
+  phone: string;
+  street: string;
+  city: string;
+  district: string;
+  province: string | null;
+  isDefault: boolean;
+}
+
+interface DiscountResult {
+  id: string;
+  code: string;
+  description: string | null;
+  discountType: string;
+  discountValue: number;
+  discountAmount: number;
+}
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -37,6 +62,15 @@ export default function CheckoutPage() {
   const esewaFormRef = useRef<HTMLFormElement>(null);
   const [esewaFormData, setEsewaFormData] = useState<Record<string, string> | null>(null);
 
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [showNewAddress, setShowNewAddress] = useState(false);
+
+  const [discountInput, setDiscountInput] = useState("");
+  const [discountResult, setDiscountResult] = useState<DiscountResult | null>(null);
+  const [discountError, setDiscountError] = useState<string | null>(null);
+  const [applyingDiscount, setApplyingDiscount] = useState(false);
+
   const [address, setAddress] = useState({
     fullName: "",
     phone: "",
@@ -47,11 +81,36 @@ export default function CheckoutPage() {
   });
 
   useEffect(() => {
-    if (user && !isSynced) {
-      fetchCart().then(() => setLoading(false));
-    } else {
+    async function init() {
+      if (user && !isSynced) {
+        await fetchCart();
+      }
+      if (user) {
+        try {
+          const res = await api.get<{ data: SavedAddress[] }>("/users/me/addresses");
+          const addrs = res.data.data;
+          setSavedAddresses(addrs);
+          const defaultAddr = addrs.find((a) => a.isDefault) ?? addrs[0];
+          if (defaultAddr) {
+            setSelectedAddressId(defaultAddr.id);
+            setAddress({
+              fullName: defaultAddr.fullName,
+              phone: defaultAddr.phone,
+              street: defaultAddr.street,
+              city: defaultAddr.city,
+              district: defaultAddr.district,
+              province: defaultAddr.province ?? "",
+            });
+          } else {
+            setShowNewAddress(true);
+          }
+        } catch {
+          setShowNewAddress(true);
+        }
+      }
       setLoading(false);
     }
+    init();
   }, [user, isSynced, fetchCart]);
 
   // Auto-submit eSewa form after state update
@@ -62,7 +121,27 @@ export default function CheckoutPage() {
   }, [esewaFormData]);
 
   const subtotal = getSubtotal();
-  const total = subtotal + (serverItems.length > 0 ? DELIVERY_FEE : 0);
+  const discount = discountResult?.discountAmount ?? 0;
+  const total = Math.max(0, subtotal - discount) + (serverItems.length > 0 ? DELIVERY_FEE : 0);
+
+  async function applyDiscount() {
+    if (!discountInput.trim()) return;
+    setApplyingDiscount(true);
+    setDiscountError(null);
+    try {
+      const res = await api.post<{ data: DiscountResult }>("/payments/discount/validate", {
+        code: discountInput.trim(),
+        subtotal,
+      });
+      setDiscountResult(res.data.data);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Invalid discount code";
+      setDiscountError(msg);
+      setDiscountResult(null);
+    } finally {
+      setApplyingDiscount(false);
+    }
+  }
 
   function validateAddress(): boolean {
     return !!(
@@ -89,12 +168,12 @@ export default function CheckoutPage() {
     setSubmitting(true);
 
     try {
-      // 1. Create order
       const orderRes = await api.post<{
         data: { id: string; totalAmount: number; currency: string };
       }>("/orders", {
         shippingAddress: address,
         paymentMethod,
+        ...(discountResult && { discountCode: discountResult.code }),
       });
 
       const orderId = orderRes.data.data.id;
@@ -125,6 +204,17 @@ export default function CheckoutPage() {
         }>("/payments/khalti/initiate", { orderId });
 
         window.location.href = khaltiRes.data.data.paymentUrl;
+        return;
+      }
+
+      if (paymentMethod === "stripe") {
+        const stripeRes = await api.post<{
+          data: { clientSecret: string; paymentIntentId: string };
+        }>("/payments/stripe/create-intent", { orderId });
+
+        router.push(
+          `/checkout/stripe?orderId=${orderId}&clientSecret=${encodeURIComponent(stripeRes.data.data.clientSecret)}`
+        );
         return;
       }
     } catch (err) {
@@ -196,6 +286,73 @@ export default function CheckoutPage() {
                     <MapPin className="w-5 h-5 text-purple-600" />
                     Shipping Address
                   </h2>
+
+                  {savedAddresses.length > 0 && (
+                    <div className="mb-4 space-y-2">
+                      <p className="text-sm text-gray-500 flex items-center gap-1">
+                        <BookMarked className="w-3.5 h-3.5" />
+                        Saved addresses
+                      </p>
+                      <div className="grid gap-2">
+                        {savedAddresses.map((addr) => (
+                          <label
+                            key={addr.id}
+                            className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                              selectedAddressId === addr.id && !showNewAddress
+                                ? "border-purple-500 bg-purple-50"
+                                : "border-gray-200 hover:border-gray-300"
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="savedAddress"
+                              checked={selectedAddressId === addr.id && !showNewAddress}
+                              onChange={() => {
+                                setSelectedAddressId(addr.id);
+                                setShowNewAddress(false);
+                                setAddress({
+                                  fullName: addr.fullName,
+                                  phone: addr.phone,
+                                  street: addr.street,
+                                  city: addr.city,
+                                  district: addr.district,
+                                  province: addr.province ?? "",
+                                });
+                              }}
+                              className="sr-only"
+                            />
+                            <div
+                              className={`mt-0.5 w-3 h-3 rounded-full shrink-0 ${
+                                selectedAddressId === addr.id && !showNewAddress ? "bg-purple-600" : "bg-gray-300"
+                              }`}
+                            />
+                            <div className="text-sm">
+                              <p className="font-medium text-gray-900">
+                                {addr.label} — {addr.fullName}
+                              </p>
+                              <p className="text-gray-500">
+                                {addr.street}, {addr.city}, {addr.district}
+                              </p>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowNewAddress(true);
+                          setSelectedAddressId(null);
+                          setAddress({ fullName: "", phone: "", street: "", city: "", district: "", province: "" });
+                        }}
+                        className="text-sm text-purple-600 flex items-center gap-1 hover:underline mt-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Use a new address
+                      </button>
+                    </div>
+                  )}
+
+                  {(showNewAddress || savedAddresses.length === 0) && (
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="fullName">Full Name *</Label>
@@ -264,6 +421,56 @@ export default function CheckoutPage() {
                       />
                     </div>
                   </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Discount Code */}
+              <Card>
+                <CardContent className="p-6">
+                  <h2 className="font-semibold text-gray-900 flex items-center gap-2 mb-4">
+                    <Tag className="w-5 h-5 text-purple-600" />
+                    Discount Code
+                  </h2>
+                  <div className="flex gap-2">
+                    <Input
+                      value={discountInput}
+                      onChange={(e) => setDiscountInput(e.target.value.toUpperCase())}
+                      placeholder="Enter promo code"
+                      disabled={!!discountResult}
+                      className="flex-1"
+                    />
+                    {discountResult ? (
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setDiscountResult(null);
+                          setDiscountInput("");
+                          setDiscountError(null);
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={applyDiscount}
+                        disabled={!discountInput.trim() || applyingDiscount}
+                        className="bg-purple-600 hover:bg-purple-700"
+                      >
+                        {applyingDiscount ? <Loader2 className="w-4 h-4 animate-spin" /> : "Apply"}
+                      </Button>
+                    )}
+                  </div>
+                  {discountResult && (
+                    <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-sm text-green-700">
+                      <Check className="w-4 h-4" />
+                      {discountResult.description ?? discountResult.code} —{" "}
+                      {formatCurrency(discountResult.discountAmount)} off
+                    </div>
+                  )}
+                  {discountError && (
+                    <p className="mt-2 text-sm text-red-600">{discountError}</p>
+                  )}
                 </CardContent>
               </Card>
 
@@ -287,6 +494,11 @@ export default function CheckoutPage() {
                         id: "khalti" as const,
                         label: "Khalti",
                         desc: "Pay with Khalti digital wallet",
+                      },
+                      {
+                        id: "stripe" as const,
+                        label: "Credit / Debit Card",
+                        desc: "Pay securely with Stripe",
                       },
                       {
                         id: "cod" as const,
@@ -374,6 +586,12 @@ export default function CheckoutPage() {
                       <span className="text-gray-500">Subtotal</span>
                       <span>{formatCurrency(subtotal)}</span>
                     </div>
+                    {discount > 0 && (
+                      <div className="flex justify-between text-green-600">
+                        <span>Discount</span>
+                        <span>-{formatCurrency(discount)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-gray-500">Delivery</span>
                       <span>{formatCurrency(DELIVERY_FEE)}</span>

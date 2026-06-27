@@ -4,9 +4,10 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { CheckCircle2, Camera, Upload, ChevronRight, AlertCircle, RotateCcw } from "lucide-react";
+import { CheckCircle2, Camera, Upload, ChevronRight, AlertCircle, RotateCcw, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { trackEvent } from "@/lib/posthog";
+import { analyzePhotoQuality, type PhotoQualityResult } from "@/lib/photoQuality";
 import api from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [qualityResult, setQualityResult] = useState<PhotoQualityResult | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
 
@@ -84,9 +86,16 @@ export default function UploadPage() {
 
   async function applyFile(f: File) {
     setValidationError(null);
+    setQualityResult(null);
     const err = await validateFile(f);
     if (err) {
       setValidationError(err);
+      return;
+    }
+    const quality = await analyzePhotoQuality(f);
+    setQualityResult(quality);
+    if (!quality.passed) {
+      setValidationError(quality.errors[0]);
       return;
     }
     setFile(f);
@@ -157,6 +166,7 @@ export default function UploadPage() {
     setFile(null);
     setPreview(null);
     setValidationError(null);
+    setQualityResult(null);
     stopCamera();
   }
 
@@ -290,6 +300,20 @@ export default function UploadPage() {
                     unoptimized
                   />
                 </div>
+                {qualityResult && qualityResult.warnings.length > 0 && (
+                  <div className="space-y-1.5">
+                    {qualityResult.warnings.map((w) => (
+                      <div
+                        key={w}
+                        className="flex items-start gap-2 rounded-md bg-yellow-50 border border-yellow-200 px-3 py-2 text-sm text-yellow-800"
+                        role="alert"
+                      >
+                        <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden="true" />
+                        {w}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <Button variant="outline" className="w-full" onClick={resetSelection}>
                   <RotateCcw className="h-4 w-4 mr-2" aria-hidden="true" />
                   Choose a different photo

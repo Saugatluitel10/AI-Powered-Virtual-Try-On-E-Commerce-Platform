@@ -58,14 +58,6 @@ const RANGES: Record<string, { min: number; max: number; unit: string }> = {
   hipsCm:         { min: 78,  max: 122, unit: "cm" },
 };
 
-const MEASUREMENT_LABELS: Record<string, string> = {
-  heightCm:       "Height",
-  shoulderWidthCm: "Shoulders",
-  bustCm:         "Bust",
-  waistCm:        "Waist",
-  hipsCm:         "Hips",
-};
-
 function normalize(value: number, min: number, max: number): number {
   return Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100));
 }
@@ -76,27 +68,45 @@ function confidenceLabel(score: number): { label: string; color: string } {
   return { label: "Low", color: "text-orange-600" };
 }
 
+const CONFIDENCE_KEY_MAP: Record<string, keyof NonNullable<BodyProfile["confidence"]>> = {
+  heightCm: "heightCm",
+  shoulderWidthCm: "shoulderWidthCm",
+  bustCm: "bustCm",
+  waistCm: "waistCm",
+  hipsCm: "hipsCm",
+};
+
 // ─── MeasurementRow ───────────────────────────────────────────────────────────
 function MeasurementRow({
   label,
   value,
   fieldKey,
+  confidenceScore,
 }: {
   label: string;
   value: number | null;
   fieldKey: string;
+  confidenceScore: number | null;
 }) {
   if (value === null) return null;
   const range = RANGES[fieldKey];
   const pct = normalize(value, range.min, range.max);
+  const conf = confidenceScore !== null ? confidenceLabel(confidenceScore) : null;
 
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between text-sm">
         <span className="font-medium text-gray-700">{label}</span>
-        <span className="tabular-nums font-semibold text-gray-900">
-          {value.toFixed(1)} {range.unit}
-        </span>
+        <div className="flex items-center gap-2">
+          {conf && (
+            <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-50", conf.color)}>
+              {conf.label}
+            </span>
+          )}
+          <span className="tabular-nums font-semibold text-gray-900">
+            {value.toFixed(1)} {range.unit}
+          </span>
+        </div>
       </div>
       <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
         <div
@@ -119,7 +129,9 @@ interface Props {
 
 export default function BodyAnalysisCard({ profile }: Props) {
   const meta = profile.bodyType ? BODY_TYPE_META[profile.bodyType] : null;
-  const conf = profile.bodyType ? confidenceLabel(0.85) : null; // placeholder
+  const overallConf = profile.overallConfidence !== null
+    ? confidenceLabel(profile.overallConfidence)
+    : null;
 
   const measurements: [string, keyof BodyProfile][] = [
     ["Height", "heightCm"],
@@ -128,6 +140,12 @@ export default function BodyAnalysisCard({ profile }: Props) {
     ["Waist", "waistCm"],
     ["Hips", "hipsCm"],
   ];
+
+  function getConfidence(fieldKey: string): number | null {
+    if (!profile.confidence) return null;
+    const key = CONFIDENCE_KEY_MAP[fieldKey];
+    return key ? (profile.confidence[key] ?? null) : null;
+  }
 
   return (
     <div className="space-y-6 max-w-xl mx-auto">
@@ -150,10 +168,10 @@ export default function BodyAnalysisCard({ profile }: Props) {
                 <h2 className={cn("text-2xl font-bold", meta.color)}>{meta.label}</h2>
                 <p className="text-sm text-gray-600 mt-1">{meta.description}</p>
               </div>
-              {conf && (
+              {overallConf && (
                 <div className="text-right shrink-0">
                   <p className="text-xs text-gray-500">Confidence</p>
-                  <p className={cn("font-semibold text-sm", conf.color)}>{conf.label}</p>
+                  <p className={cn("font-semibold text-sm", overallConf.color)}>{overallConf.label}</p>
                 </div>
               )}
             </div>
@@ -176,6 +194,7 @@ export default function BodyAnalysisCard({ profile }: Props) {
               label={label}
               value={profile[field] as number | null}
               fieldKey={field}
+              confidenceScore={getConfidence(field)}
             />
           ))}
           <p className="text-xs text-gray-400 pt-1">

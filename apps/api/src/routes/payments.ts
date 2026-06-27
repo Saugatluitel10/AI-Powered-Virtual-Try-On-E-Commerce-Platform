@@ -135,16 +135,25 @@ router.post("/esewa/verify", verifyJwt, async (req: AuthRequest, res) => {
       },
     });
 
-    // Send confirmation email
-    await enqueueEmail({
-      type: "order_confirmation",
-      to: order.user.email,
-      payload: {
-        orderId: order.id,
-        total: order.totalAmount,
-        currency: order.currency,
-      },
-    });
+    await Promise.all([
+      enqueueEmail({
+        type: "order_confirmation",
+        to: order.user.email,
+        payload: { orderId: order.id, total: order.totalAmount, currency: order.currency },
+      }),
+      enqueueEmail({
+        type: "order_receipt",
+        to: order.user.email,
+        payload: {
+          orderId: order.id,
+          total: order.totalAmount,
+          currency: order.currency,
+          paymentMethod: "esewa",
+          paymentRef: decoded.transaction_code ?? decoded.transaction_uuid ?? null,
+          invoiceUrl: `${FRONTEND_URL}/api/v1/orders/${order.id}/invoice`,
+        },
+      }),
+    ]);
 
     return res.json({
       data: {
@@ -286,15 +295,25 @@ router.post("/khalti/verify", verifyJwt, async (req: AuthRequest, res) => {
       },
     });
 
-    await enqueueEmail({
-      type: "order_confirmation",
-      to: order.user.email,
-      payload: {
-        orderId: order.id,
-        total: order.totalAmount,
-        currency: order.currency,
-      },
-    });
+    await Promise.all([
+      enqueueEmail({
+        type: "order_confirmation",
+        to: order.user.email,
+        payload: { orderId: order.id, total: order.totalAmount, currency: order.currency },
+      }),
+      enqueueEmail({
+        type: "order_receipt",
+        to: order.user.email,
+        payload: {
+          orderId: order.id,
+          total: order.totalAmount,
+          currency: order.currency,
+          paymentMethod: "khalti",
+          paymentRef: result.transaction_id,
+          invoiceUrl: `${FRONTEND_URL}/api/v1/orders/${order.id}/invoice`,
+        },
+      }),
+    ]);
 
     return res.json({
       data: {
@@ -305,6 +324,191 @@ router.post("/khalti/verify", verifyJwt, async (req: AuthRequest, res) => {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error verifying Khalti payment";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Stripe (customer order payments)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY ?? "";
+
+// ─── POST /api/v1/payments/stripe/create-intent ─────────────────────────────
+router.post("/stripe/create-intent", verifyJwt, async (req: AuthRequest, res) => {
+  try {
+    if (!STRIPE_SECRET_KEY) {
+      return res.status(500).json({ error: "Stripe is not configured." });
+    }
+
+    const { orderId } = req.body as { orderId?: string };
+    if (!orderId) {
+      return res.status(400).json({ error: "orderId is required." });
+    }
+
+    const order = await prisma.order.findFirst({
+      where: { id: orderId, userId: req.userId!, status: "pending" },
+      include: { user: { select: { email: true } } },
+    });
+    if (!order) {
+      return res.status(404).json({ error: "Pending order not found." });
+    }
+
+    const Stripe = (await import("stripe")).default;
+    const stripe = new Stripe(STRIPE_SECRET_KEY);
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(order.totalAmount * 100),
+      currency: order.currency.toLowerCase(),
+      metadata: { orderId: order.id, userId: req.userId! },
+      receipt_email: order.user.email,
+    });
+
+    return res.json({
+      data: {
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error creating payment intent";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── POST /api/v1/payments/stripe/confirm ───────────────────────────────────
+router.post("/stripe/confirm", verifyJwt, async (req: AuthRequest, res) => {
+  try {
+    const { orderId, paymentIntentId } = req.body as {
+      orderId?: string;
+      paymentIntentId?: string;
+    };
+
+    if (!orderId || !paymentIntentId) {
+      return res.status(400).json({ error: "orderId and paymentIntentId are required." });
+    }
+
+    if (!STRIPE_SECRET_KEY) {
+      return res.status(500).json({ error: "Stripe is not configured." });
+    }
+
+    const Stripe = (await import("stripe")).default;
+    const stripe = new Stripe(STRIPE_SECRET_KEY);
+
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+    if (paymentIntent.status !== "succeeded") {
+      return res.status(400).json({ error: `Payment not completed. Status: ${paymentIntent.status}` });
+    }
+
+    if (paymentIntent.metadata.orderId !== orderId) {
+      return res.status(400).json({ error: "Payment intent does not match order." });
+    }
+
+    const order = await prisma.order.findFirst({
+      where: { id: orderId, userId: req.userId!, status: "pending" },
+      include: { user: { select: { email: true } } },
+    });
+    if (!order) {
+      return res.status(404).json({ error: "Pending order not found." });
+    }
+
+    await prisma.order.update({
+      where: { id: order.id },
+      data: {
+        status: "confirmed",
+        paymentMethod: "stripe",
+        paymentRef: paymentIntentId,
+      },
+    });
+
+    await Promise.all([
+      enqueueEmail({
+        type: "order_confirmation",
+        to: order.user.email,
+        payload: { orderId: order.id, total: order.totalAmount, currency: order.currency },
+      }),
+      enqueueEmail({
+        type: "order_receipt",
+        to: order.user.email,
+        payload: {
+          orderId: order.id,
+          total: order.totalAmount,
+          currency: order.currency,
+          paymentMethod: "stripe",
+          paymentRef: paymentIntentId,
+          invoiceUrl: `${FRONTEND_URL}/api/v1/orders/${order.id}/invoice`,
+        },
+      }),
+    ]);
+
+    return res.json({
+      data: {
+        orderId: order.id,
+        status: "confirmed",
+        paymentRef: paymentIntentId,
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error confirming Stripe payment";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Discount Codes
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── POST /api/v1/payments/discount/validate ────────────────────────────────
+router.post("/discount/validate", verifyJwt, async (req: AuthRequest, res) => {
+  try {
+    const { code, subtotal } = req.body as { code?: string; subtotal?: number };
+
+    if (!code?.trim()) {
+      return res.status(400).json({ error: "Discount code is required." });
+    }
+
+    const discount = await prisma.discountCode.findUnique({
+      where: { code: code.trim().toUpperCase() },
+    });
+
+    if (!discount || !discount.isActive) {
+      return res.status(404).json({ error: "Invalid discount code." });
+    }
+
+    if (discount.expiresAt && discount.expiresAt < new Date()) {
+      return res.status(400).json({ error: "Discount code has expired." });
+    }
+
+    if (discount.maxUses && discount.currentUses >= discount.maxUses) {
+      return res.status(400).json({ error: "Discount code usage limit reached." });
+    }
+
+    if (discount.minOrderAmount && subtotal && subtotal < discount.minOrderAmount) {
+      return res.status(400).json({
+        error: `Minimum order amount is ${discount.minOrderAmount}.`,
+      });
+    }
+
+    let discountAmount = 0;
+    if (discount.discountType === "percentage") {
+      discountAmount = ((subtotal ?? 0) * discount.discountValue) / 100;
+    } else {
+      discountAmount = discount.discountValue;
+    }
+
+    return res.json({
+      data: {
+        id: discount.id,
+        code: discount.code,
+        description: discount.description,
+        discountType: discount.discountType,
+        discountValue: discount.discountValue,
+        discountAmount: Math.round(discountAmount * 100) / 100,
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error validating discount code";
     return res.status(500).json({ error: message });
   }
 });

@@ -39,7 +39,7 @@ ${productCatalog}
 
 Guidelines:
 - Always explain WHY a garment suits the user's body type (e.g. "A-line dresses balance wider hips by drawing attention to the waist")
-- Recommend specific products from the catalog by name and mention the price in NPR (Rs.)
+- Recommend specific products using markdown links exactly as shown in the catalog (e.g. [Product Name](/shop/product-slug)) so users can click through
 - If the user asks about festivals (Dashain, Tihar, etc.), suggest traditional Nepali garments
 - Keep responses concise — 2-3 outfit suggestions max per message
 - Be encouraging and body-positive
@@ -71,7 +71,7 @@ router.post("/chat", verifyJwt, async (req: AuthRequest, res) => {
       }),
       prisma.product.findMany({
         where: { isActive: true },
-        select: { name: true, category: true, garmentType: true, gender: true, price: true, sizes: true, suitableBodyTypes: true, description: true },
+        select: { id: true, slug: true, name: true, category: true, garmentType: true, gender: true, price: true, sizes: true, suitableBodyTypes: true, description: true },
         take: 50,
       }),
     ]);
@@ -85,7 +85,7 @@ router.post("/chat", verifyJwt, async (req: AuthRequest, res) => {
     const productCatalog = products
       .map(
         (p: typeof products[number]) =>
-          `- ${p.name} (${p.category}, ${p.gender}, Rs. ${p.price}) — Sizes: ${p.sizes.join(",")} — Suits: ${p.suitableBodyTypes.join(",")}${p.description ? ` — ${p.description}` : ""}`
+          `- [${p.name}](/shop/${p.slug}) (${p.category}, ${p.gender}, Rs. ${p.price}) — Sizes: ${p.sizes.join(",")} — Suits: ${p.suitableBodyTypes.join(",")}${p.description ? ` — ${p.description}` : ""}`
       )
       .join("\n");
 
@@ -271,19 +271,106 @@ router.get("/conversations/:id", verifyJwt, async (req: AuthRequest, res) => {
   }
 });
 
-// POST /api/v1/recommendations/style-advice
-router.post("/style-advice", verifyJwt, (_req, res) => {
-  res.json({ ok: true, route: "POST /recommendations/style-advice" });
-});
-
 // GET /api/v1/recommendations/for-me
-router.get("/for-me", verifyJwt, (_req, res) => {
-  res.json({ ok: true, route: "GET /recommendations/for-me" });
+router.get("/for-me", verifyJwt, cacheResponse(300, "reco"), async (req: AuthRequest, res) => {
+  try {
+    const [bodyProfile, styleProfile] = await Promise.all([
+      prisma.bodyProfile.findUnique({
+        where: { userId: req.userId! },
+        select: { bodyType: true },
+      }),
+      prisma.styleProfile.findUnique({
+        where: { userId: req.userId! },
+        select: { preferredStyles: true, occasions: true },
+      }),
+    ]);
+
+    const where: Record<string, unknown> = { isActive: true };
+    if (bodyProfile?.bodyType) {
+      where.suitableBodyTypes = { has: bodyProfile.bodyType };
+    }
+
+    const products = await prisma.product.findMany({
+      where,
+      include: { brand: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 12,
+    });
+
+    const items = products.map((p: typeof products[number]) => ({
+      id: p.id,
+      name: p.name,
+      slug: p.slug,
+      price: p.price,
+      currency: p.currency,
+      sizes: p.sizes,
+      gender: p.gender,
+      garmentType: p.garmentType,
+      isTryonEnabled: p.isTryonEnabled,
+      suitableBodyTypes: p.suitableBodyTypes,
+      primaryImageUrl: p.images[0] ?? null,
+      brandName: p.brand?.name ?? null,
+    }));
+
+    return res.json({ data: items });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error fetching recommendations";
+    return res.status(500).json({ error: message });
+  }
 });
 
 // GET /api/v1/recommendations/complete-the-look/:productId
-router.get("/complete-the-look/:productId", verifyJwt, (_req, res) => {
-  res.json({ ok: true, route: "GET /recommendations/complete-the-look/:productId" });
+router.get("/complete-the-look/:productId", verifyJwt, cacheResponse(600, "reco"), async (req: AuthRequest, res) => {
+  try {
+    const product = await prisma.product.findUnique({
+      where: { id: req.params.productId as string },
+      select: { garmentType: true, gender: true, category: true, id: true },
+    });
+
+    if (!product) return res.status(404).json({ error: "Product not found" });
+
+    const complementaryTypes: Record<string, string[]> = {
+      tops: ["bottoms", "accessories", "outerwear"],
+      bottoms: ["tops", "accessories", "outerwear"],
+      dresses: ["accessories", "outerwear"],
+      outerwear: ["tops", "bottoms", "accessories"],
+      accessories: ["tops", "bottoms", "dresses"],
+      sets: ["accessories"],
+    };
+
+    const types = complementaryTypes[product.garmentType ?? ""] ?? ["tops", "bottoms", "accessories"];
+
+    const complements = await prisma.product.findMany({
+      where: {
+        isActive: true,
+        id: { not: product.id },
+        garmentType: { in: types },
+        gender: product.gender,
+      },
+      include: { brand: { select: { name: true } } },
+      take: 8,
+    });
+
+    const items = complements.map((p: typeof complements[number]) => ({
+      id: p.id,
+      name: p.name,
+      slug: p.slug,
+      price: p.price,
+      currency: p.currency,
+      sizes: p.sizes,
+      gender: p.gender,
+      garmentType: p.garmentType,
+      isTryonEnabled: p.isTryonEnabled,
+      suitableBodyTypes: p.suitableBodyTypes,
+      primaryImageUrl: p.images[0] ?? null,
+      brandName: p.brand?.name ?? null,
+    }));
+
+    return res.json({ data: items });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error fetching complementary items";
+    return res.status(500).json({ error: message });
+  }
 });
 
 export default router;

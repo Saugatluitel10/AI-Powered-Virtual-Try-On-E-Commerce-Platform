@@ -9,6 +9,7 @@ import { trackEvent } from "@/lib/posthog";
 import type { BodyProfile } from "@/types/body";
 import { useBodyProfileStore } from "@/store/bodyProfileStore";
 import BodyAnalysisCard from "@/components/body-analysis/BodyAnalysisCard";
+import MeasurementHistory from "@/components/body-analysis/MeasurementHistory";
 import { Button } from "@/components/ui/button";
 
 const TIMEOUT_MS = 90_000; // 90 seconds
@@ -137,8 +138,9 @@ export default function AnalysisPage() {
   // ── Completed state ────────────────────────────────────────────────────────
   if (profile?.analysisComplete) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-10">
+      <div className="max-w-2xl mx-auto px-4 py-10 space-y-6">
         <BodyAnalysisCard profile={profile} />
+        <MeasurementHistory />
       </div>
     );
   }

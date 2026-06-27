@@ -229,6 +229,37 @@ router.get("/:id", verifyJwt, async (req: AuthRequest, res) => {
   }
 });
 
+// ─── POST /api/v1/try-on/:id/feedback ──────────────────────────────────────
+router.post("/:id/feedback", verifyJwt, async (req: AuthRequest, res) => {
+  try {
+    const { rating } = req.body as { rating?: number };
+    if (rating !== 1 && rating !== -1) {
+      return res.status(400).json({ error: "rating must be 1 (thumbs up) or -1 (thumbs down)." });
+    }
+
+    const result = await prisma.tryOnResult.findFirst({
+      where: { id: req.params.id as string, userId: req.userId! },
+    });
+
+    if (!result) {
+      return res.status(404).json({ error: "Try-on result not found." });
+    }
+
+    await prisma.tryOnResult.update({
+      where: { id: result.id },
+      data: { qualityRating: rating },
+    });
+
+    const cacheKey = `tryon:result:${result.id}`;
+    await redis.del(cacheKey).catch(() => {});
+
+    return res.json({ data: { id: result.id, qualityRating: rating } });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to save feedback";
+    return res.status(500).json({ error: message });
+  }
+});
+
 // ─── POST /api/v1/try-on/body-scan (legacy placeholder) ────────────────────
 router.post("/body-scan", verifyJwt, (_req, res) => {
   res.json({ ok: true, route: "POST /try-on/body-scan" });

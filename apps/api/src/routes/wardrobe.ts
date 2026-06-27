@@ -482,4 +482,78 @@ router.get("/:id/complete-the-look", verifyJwt, async (req: AuthRequest, res) =>
   }
 });
 
+// ─── GET /api/v1/wardrobe/gap-analysis ──────────────────────────────────────
+router.get("/gap-analysis", verifyJwt, async (req: AuthRequest, res) => {
+  try {
+    const wardrobeItems = await prisma.wardrobeItem.findMany({
+      where: { userId: req.userId! },
+      include: {
+        product: {
+          select: { category: true, garmentType: true, gender: true },
+        },
+      },
+    });
+
+    const categorySet = new Set(wardrobeItems.map((i: { product: { category: string } }) => i.product.category));
+    const garmentTypeSet = new Set(
+      wardrobeItems
+        .map((i: { product: { garmentType: string | null } }) => i.product.garmentType)
+        .filter(Boolean)
+    );
+
+    const essentialCategories = ["tops", "bottoms", "outerwear", "accessories", "dresses"];
+    const missingCategories = essentialCategories.filter((c) => !categorySet.has(c));
+
+    const essentialGarmentTypes: Record<string, string[]> = {
+      tops: ["t-shirt", "shirt", "blouse", "sweater"],
+      bottoms: ["jeans", "trousers", "skirt"],
+      outerwear: ["jacket", "coat"],
+      accessories: ["belt", "scarf", "bag"],
+    };
+
+    const missingGarmentTypes: Array<{ category: string; type: string }> = [];
+    for (const [cat, types] of Object.entries(essentialGarmentTypes)) {
+      if (categorySet.has(cat)) {
+        for (const t of types) {
+          if (!garmentTypeSet.has(t)) {
+            missingGarmentTypes.push({ category: cat, type: t });
+          }
+        }
+      }
+    }
+
+    const suggestions = await prisma.product.findMany({
+      where: {
+        isActive: true,
+        category: { in: missingCategories.length > 0 ? missingCategories : undefined },
+      },
+      include: { brand: { select: { name: true } } },
+      take: 8,
+      orderBy: { createdAt: "desc" },
+    });
+
+    return res.json({
+      data: {
+        totalItems: wardrobeItems.length,
+        categoriesOwned: Array.from(categorySet),
+        missingCategories,
+        missingGarmentTypes: missingGarmentTypes.slice(0, 10),
+        suggestions: suggestions.map((p: typeof suggestions[number]) => ({
+          id: p.id,
+          name: p.name,
+          slug: p.slug,
+          price: p.price,
+          currency: p.currency,
+          primaryImageUrl: p.images[0] ?? null,
+          category: p.category,
+          brandName: p.brand?.name ?? null,
+        })),
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error analyzing wardrobe";
+    return res.status(500).json({ error: message });
+  }
+});
+
 export default router;

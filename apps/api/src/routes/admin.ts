@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { verifyJwt, requireRole, type AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
+import { enqueueEmail } from "../jobs/queues";
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -87,6 +88,74 @@ router.get("/dashboard", async (_req: AuthRequest, res) => {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error fetching dashboard";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── PATCH /api/v1/admin/brands/:id/verify ──────────────────────────────────
+router.patch("/brands/:id/verify", async (req: AuthRequest, res) => {
+  try {
+    const { isVerified } = req.body as { isVerified?: boolean };
+
+    const brand = await prisma.brand.findUnique({
+      where: { id: req.params.id as string },
+    });
+
+    if (!brand) {
+      return res.status(404).json({ error: "Brand not found." });
+    }
+
+    const updated = await prisma.brand.update({
+      where: { id: brand.id },
+      data: { isVerified: isVerified ?? true },
+    });
+
+    return res.json({
+      data: { id: updated.id, name: updated.name, isVerified: updated.isVerified },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error verifying brand";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── PATCH /api/v1/admin/returns/:id ────────────────────────────────────────
+router.patch("/returns/:id", async (req: AuthRequest, res) => {
+  try {
+    const { status } = req.body as { status?: string };
+
+    if (!status || !["approved", "rejected"].includes(status)) {
+      return res.status(400).json({ error: "status must be 'approved' or 'rejected'." });
+    }
+
+    const returnRequest = await prisma.returnRequest.findUnique({
+      where: { id: req.params.id as string },
+      include: {
+        order: { select: { id: true } },
+        user: { select: { email: true } },
+      },
+    });
+
+    if (!returnRequest) {
+      return res.status(404).json({ error: "Return request not found." });
+    }
+
+    const updated = await prisma.returnRequest.update({
+      where: { id: returnRequest.id },
+      data: { status },
+    });
+
+    await enqueueEmail({
+      type: "return_request_update",
+      to: returnRequest.user.email,
+      payload: { orderId: returnRequest.order.id, status },
+    });
+
+    return res.json({
+      data: { id: updated.id, status: updated.status },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error updating return request";
     return res.status(500).json({ error: message });
   }
 });

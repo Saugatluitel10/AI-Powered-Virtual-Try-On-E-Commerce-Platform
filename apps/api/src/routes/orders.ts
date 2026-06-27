@@ -216,9 +216,10 @@ router.get("/:id/invoice", verifyJwt, async (req: AuthRequest, res) => {
 // ─── POST /api/v1/orders ─────────────────────────────────────────────────────
 router.post("/", verifyJwt, async (req: AuthRequest, res) => {
   try {
-    const { shippingAddress, paymentMethod } = req.body as {
+    const { shippingAddress, paymentMethod, discountCode } = req.body as {
       shippingAddress?: Record<string, string>;
       paymentMethod?: string;
+      discountCode?: string;
     };
 
     if (!shippingAddress) {
@@ -239,11 +240,37 @@ router.post("/", verifyJwt, async (req: AuthRequest, res) => {
       return res.status(400).json({ error: "Cart is empty." });
     }
 
-    let totalAmount = 0;
+    let subtotal = 0;
     for (const ci of cartItems) {
-      totalAmount += ci.product.price * ci.quantity;
+      subtotal += ci.product.price * ci.quantity;
     }
     const currency = cartItems[0].product.currency;
+
+    let discountAmount = 0;
+    let discountCodeId: string | null = null;
+
+    if (discountCode) {
+      const discount = await prisma.discountCode.findUnique({
+        where: { code: discountCode.trim().toUpperCase() },
+      });
+
+      if (discount && discount.isActive) {
+        const notExpired = !discount.expiresAt || discount.expiresAt > new Date();
+        const withinLimit = !discount.maxUses || discount.currentUses < discount.maxUses;
+        const meetsMinimum = !discount.minOrderAmount || subtotal >= discount.minOrderAmount;
+
+        if (notExpired && withinLimit && meetsMinimum) {
+          discountCodeId = discount.id;
+          if (discount.discountType === "percentage") {
+            discountAmount = (subtotal * discount.discountValue) / 100;
+          } else {
+            discountAmount = Math.min(discount.discountValue, subtotal);
+          }
+        }
+      }
+    }
+
+    const totalAmount = Math.max(0, subtotal - discountAmount);
 
     const orderItemsData = cartItems.map((ci: typeof cartItems[number]) => ({
       productId: ci.product.id,
@@ -258,13 +285,22 @@ router.post("/", verifyJwt, async (req: AuthRequest, res) => {
           userId: req.userId!,
           status: "pending",
           totalAmount,
+          discountAmount,
           currency,
           paymentMethod,
+          discountCodeId,
           shippingAddress: shippingAddress as Record<string, string>,
           items: { create: orderItemsData },
         },
         include: { items: true },
       });
+
+      if (discountCodeId) {
+        await tx.discountCode.update({
+          where: { id: discountCodeId },
+          data: { currentUses: { increment: 1 } },
+        });
+      }
 
       await tx.cartItem.deleteMany({ where: { userId: req.userId! } });
 
@@ -385,6 +421,123 @@ router.post("/:id/return", verifyJwt, async (req: AuthRequest, res) => {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error creating return request";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── POST /api/v1/orders/:id/refund ─────────────────────────────────────────
+router.post("/:id/refund", verifyJwt, async (req: AuthRequest, res) => {
+  try {
+    const { reason } = req.body as { reason?: string };
+
+    if (!reason?.trim()) {
+      return res.status(400).json({ error: "Refund reason is required." });
+    }
+
+    const order = await prisma.order.findFirst({
+      where: { id: req.params.id as string, userId: req.userId! },
+      include: { user: { select: { email: true } } },
+    });
+
+    if (!order) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    if (!["confirmed", "delivered"].includes(order.status)) {
+      return res.status(400).json({ error: "Only confirmed or delivered orders can be refunded." });
+    }
+
+    if (order.refundAmount) {
+      return res.status(400).json({ error: "Refund already initiated for this order." });
+    }
+
+    const updated = await prisma.order.update({
+      where: { id: order.id },
+      data: {
+        status: "refund_requested",
+        refundAmount: order.totalAmount,
+        refundRef: `REF-${order.id.slice(0, 8).toUpperCase()}-${Date.now()}`,
+      },
+    });
+
+    await enqueueEmail({
+      type: "refund_confirmation",
+      to: order.user.email,
+      payload: {
+        orderId: order.id,
+        refundAmount: updated.refundAmount,
+        currency: order.currency,
+        reason: reason.trim(),
+      },
+    });
+
+    return res.json({
+      data: {
+        id: updated.id,
+        status: updated.status,
+        refundAmount: updated.refundAmount,
+        refundRef: updated.refundRef,
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error initiating refund";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── POST /api/v1/orders/:id/reorder ────────────────────────────────────────
+router.post("/:id/reorder", verifyJwt, async (req: AuthRequest, res) => {
+  try {
+    const order = await prisma.order.findFirst({
+      where: { id: req.params.id as string, userId: req.userId! },
+      include: {
+        items: {
+          include: {
+            product: { select: { id: true, isActive: true, price: true } },
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    const activeItems = order.items.filter(
+      (i: { product: { isActive: boolean } }) => i.product.isActive
+    );
+
+    if (activeItems.length === 0) {
+      return res.status(400).json({ error: "No items from this order are currently available." });
+    }
+
+    for (const item of activeItems) {
+      await prisma.cartItem.upsert({
+        where: {
+          userId_productId_size: {
+            userId: req.userId!,
+            productId: item.productId,
+            size: item.size,
+          },
+        },
+        update: { quantity: item.quantity },
+        create: {
+          userId: req.userId!,
+          productId: item.productId,
+          size: item.size,
+          quantity: item.quantity,
+        },
+      });
+    }
+
+    return res.json({
+      data: {
+        addedCount: activeItems.length,
+        skippedCount: order.items.length - activeItems.length,
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error reordering";
     return res.status(500).json({ error: message });
   }
 });
