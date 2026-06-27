@@ -1,9 +1,12 @@
 import { prisma } from "./prisma";
 
+export type FitType = "slim" | "regular" | "relaxed";
+
 export interface SizeRecommendation {
   recommendedSize: string;
   confidence: number;
   reasoning: string;
+  fitType: FitType;
 }
 
 interface UserMeasurements {
@@ -155,9 +158,14 @@ export async function recommendSize(
     ? `Based on your measurements, ${bestSize} is the best fit. ${bestDetails.join(". ")}.`
     : `${bestSize} is the closest match for your body profile.`;
 
+  let fitType: FitType = "regular";
+  if (bestScore >= 0.85) fitType = "slim";
+  else if (bestScore < 0.5) fitType = "relaxed";
+
   return {
     recommendedSize: bestSize,
     confidence: Math.round(confidence * 100) / 100,
     reasoning,
+    fitType,
   };
 }

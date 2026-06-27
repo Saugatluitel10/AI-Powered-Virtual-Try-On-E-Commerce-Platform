@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { verifyJwt, requireRole, type AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
+import { enqueueEmail } from "../jobs/queues";
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -359,5 +360,270 @@ router.get("/commission", async (req: AuthRequest, res) => {
     return res.status(500).json({ error: message });
   }
 });
+
+// ─── PATCH /api/v1/brand/orders/:id/status ──────────────────────────────────
+const VALID_TRANSITIONS: Record<string, string[]> = {
+  pending: ["confirmed"],
+  confirmed: ["processing", "shipped"],
+  processing: ["shipped"],
+  shipped: ["delivered"],
+};
+
+router.patch("/orders/:id/status", async (req: AuthRequest, res) => {
+  try {
+    const { status } = req.body as { status?: string };
+    if (!status) {
+      return res.status(400).json({ error: "status is required." });
+    }
+
+    const orderItem = await prisma.orderItem.findFirst({
+      where: {
+        orderId: req.params.id as string,
+        product: { brandId: req.brandId! },
+      },
+      select: { orderId: true },
+    });
+
+    if (!orderItem) {
+      return res.status(404).json({ error: "Order not found for your brand." });
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderItem.orderId },
+      include: { user: { select: { email: true } } },
+    });
+
+    if (!order) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    const allowedNext = VALID_TRANSITIONS[order.status];
+    if (!allowedNext?.includes(status)) {
+      return res.status(400).json({
+        error: `Cannot transition from '${order.status}' to '${status}'. Allowed: ${allowedNext?.join(", ") ?? "none"}`,
+      });
+    }
+
+    const updated = await prisma.order.update({
+      where: { id: order.id },
+      data: { status },
+    });
+
+    await enqueueEmail({
+      type: "order_status_update",
+      to: order.user.email,
+      payload: { orderId: order.id, status },
+    });
+
+    return res.json({ data: { id: updated.id, status: updated.status } });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error updating order status";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── GET /api/v1/brand/reviews ──────────────────────────────────────────────
+router.get("/reviews", async (req: AuthRequest, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize as string) || 20));
+
+    const where = { product: { brandId: req.brandId! } };
+
+    const [total, reviews] = await Promise.all([
+      prisma.review.count({ where }),
+      prisma.review.findMany({
+        where,
+        include: {
+          user: { select: { name: true, email: true } },
+          product: { select: { name: true, images: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+
+    return res.json({
+      data: {
+        items: reviews.map((r: typeof reviews[number]) => ({
+          id: r.id,
+          rating: r.rating,
+          title: r.title,
+          comment: r.comment,
+          reply: r.reply,
+          repliedAt: r.repliedAt?.toISOString() ?? null,
+          productName: r.product.name,
+          productImage: r.product.images[0] ?? null,
+          customerName: r.user.name ?? r.user.email,
+          createdAt: r.createdAt.toISOString(),
+        })),
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error fetching reviews";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── POST /api/v1/brand/reviews/:id/reply ───────────────────────────────────
+router.post("/reviews/:id/reply", async (req: AuthRequest, res) => {
+  try {
+    const { reply } = req.body as { reply?: string };
+    if (!reply?.trim()) {
+      return res.status(400).json({ error: "Reply text is required." });
+    }
+
+    const review = await prisma.review.findFirst({
+      where: { id: req.params.id as string, product: { brandId: req.brandId! } },
+    });
+
+    if (!review) {
+      return res.status(404).json({ error: "Review not found." });
+    }
+
+    const updated = await prisma.review.update({
+      where: { id: review.id },
+      data: { reply: reply.trim(), repliedAt: new Date() },
+    });
+
+    return res.json({
+      data: { id: updated.id, reply: updated.reply, repliedAt: updated.repliedAt?.toISOString() },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error replying to review";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── GET /api/v1/brand/inventory ────────────────────────────────────────────
+router.get("/inventory", async (req: AuthRequest, res) => {
+  try {
+    const products = await prisma.product.findMany({
+      where: { brandId: req.brandId! },
+      select: {
+        id: true,
+        name: true,
+        sizes: true,
+        images: true,
+        variants: { select: { id: true, size: true, stock: true } },
+      },
+      orderBy: { name: "asc" },
+    });
+
+    return res.json({
+      data: products.map((p: typeof products[number]) => {
+        const variantMap = new Map(p.variants.map((v: { size: string; stock: number; id: string }) => [v.size, v]));
+        return {
+          id: p.id,
+          name: p.name,
+          image: p.images[0] ?? null,
+          sizes: p.sizes.map((size) => {
+            const variant = variantMap.get(size);
+            return {
+              size,
+              stock: variant?.stock ?? 0,
+              variantId: variant?.id ?? null,
+            };
+          }),
+        };
+      }),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error fetching inventory";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── PATCH /api/v1/brand/inventory/:productId ───────────────────────────────
+router.patch("/inventory/:productId", async (req: AuthRequest, res) => {
+  try {
+    const { sizes } = req.body as {
+      sizes: Array<{ size: string; stock: number }>;
+    };
+
+    if (!sizes?.length) {
+      return res.status(400).json({ error: "sizes array is required." });
+    }
+
+    const product = await prisma.product.findFirst({
+      where: { id: req.params.productId as string, brandId: req.brandId! },
+    });
+
+    if (!product) {
+      return res.status(404).json({ error: "Product not found." });
+    }
+
+    for (const { size, stock } of sizes) {
+      await prisma.productVariant.upsert({
+        where: { productId_size: { productId: product.id, size } },
+        update: { stock: Math.max(0, stock) },
+        create: { productId: product.id, size, stock: Math.max(0, stock) },
+      });
+    }
+
+    return res.json({ data: { success: true } });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error updating inventory";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── POST /api/v1/brand/size-chart ──────────────────────────────────────────
+router.post("/size-chart", async (req: AuthRequest, res) => {
+  try {
+    const { sizes } = req.body as {
+      sizes: Array<{
+        size: string;
+        bustMin?: number; bustMax?: number;
+        waistMin?: number; waistMax?: number;
+        hipsMin?: number; hipsMax?: number;
+        sortOrder?: number;
+      }>;
+    };
+
+    if (!sizes?.length) {
+      return res.status(400).json({ error: "sizes array is required." });
+    }
+
+    for (const s of sizes) {
+      await prisma.sizeChart.upsert({
+        where: { brandId_size: { brandId: req.brandId!, size: s.size } },
+        update: {
+          bustMin: s.bustMin ?? null,
+          bustMax: s.bustMax ?? null,
+          waistMin: s.waistMin ?? null,
+          waistMax: s.waistMax ?? null,
+          hipsMin: s.hipsMin ?? null,
+          hipsMax: s.hipsMax ?? null,
+          sortOrder: s.sortOrder ?? 0,
+        },
+        create: {
+          brandId: req.brandId!,
+          size: s.size,
+          bustMin: s.bustMin ?? null,
+          bustMax: s.bustMax ?? null,
+          waistMin: s.waistMin ?? null,
+          waistMax: s.waistMax ?? null,
+          hipsMin: s.hipsMin ?? null,
+          hipsMax: s.hipsMax ?? null,
+          sortOrder: s.sortOrder ?? 0,
+        },
+      });
+    }
+
+    return res.json({ data: { success: true } });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error updating size chart";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── POST /api/v1/brand/register (public — no BRAND role required) ──────────
+// This is mounted separately in app.ts before the role-gated routes
 
 export default router;
