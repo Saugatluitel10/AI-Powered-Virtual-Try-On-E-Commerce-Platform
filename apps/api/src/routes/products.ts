@@ -238,6 +238,55 @@ router.get("/new-arrivals", cacheResponse(600, "products"), async (_req: Request
   }
 });
 
+// ─── GET /api/v1/products/trending ──────────────────────────────────────────
+router.get("/trending", cacheResponse(600, "products"), async (_req: Request, res) => {
+  try {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const topOrderItems = await prisma.orderItem.groupBy({
+      by: ["productId"],
+      where: {
+        order: { createdAt: { gte: thirtyDaysAgo }, status: { notIn: ["cancelled", "refunded"] } },
+      },
+      _sum: { quantity: true },
+      orderBy: { _sum: { quantity: "desc" } },
+      take: 12,
+    });
+
+    const productIds = topOrderItems.map((item: typeof topOrderItems[number]) => item.productId);
+
+    const products = await prisma.product.findMany({
+      where: { id: { in: productIds }, isActive: true },
+      include: { brand: { select: { name: true } } },
+    });
+
+    const productMap = new Map(products.map((p: typeof products[number]) => [p.id, p]));
+    const items = productIds
+      .map((id: string) => productMap.get(id))
+      .filter(Boolean)
+      .map((p) => ({
+        id: p!.id,
+        name: p!.name,
+        slug: p!.slug,
+        price: p!.price,
+        currency: p!.currency,
+        sizes: p!.sizes,
+        gender: p!.gender,
+        garmentType: p!.garmentType,
+        isTryonEnabled: p!.isTryonEnabled,
+        suitableBodyTypes: p!.suitableBodyTypes,
+        primaryImageUrl: p!.images[0] ?? null,
+        brandName: p!.brand?.name ?? null,
+      }));
+
+    return res.json({ data: items });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error fetching trending products";
+    return res.status(500).json({ error: message });
+  }
+});
+
 // ─── GET /api/v1/products/:id/related ───────────────────────────────────────
 router.get("/:id/related", cacheResponse(600, "products"), async (req: Request, res) => {
   try {

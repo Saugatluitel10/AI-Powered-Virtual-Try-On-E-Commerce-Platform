@@ -13,10 +13,15 @@ import {
   Loader2,
   ChevronRight,
   Edit3,
+  Settings,
+  Heart,
+  Camera,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/store/authStore";
 import api from "@/lib/api";
 
@@ -51,6 +56,9 @@ export default function ProfilePage() {
   const [bodyProfile, setBodyProfile] = useState<BodyProfileData | null>(null);
   const [styleProfile, setStyleProfile] = useState<StyleProfileData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -90,13 +98,75 @@ export default function ProfilePage() {
         <Card className="mb-6">
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-purple-100 rounded-full flex items-center justify-center">
-                <User className="w-7 h-7 text-purple-600" />
+              <div className="relative">
+                <div className="w-14 h-14 bg-purple-100 rounded-full flex items-center justify-center overflow-hidden">
+                  {profile?.avatarUrl ? (
+                    <img src={profile.avatarUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <User className="w-7 h-7 text-purple-600" />
+                  )}
+                </div>
+                <label className="absolute -bottom-1 -right-1 w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center cursor-pointer hover:bg-purple-700">
+                  <Camera className="w-3 h-3 text-white" />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const formData = new FormData();
+                      formData.append("photo", file);
+                      try {
+                        const res = await api.post<{ data: { avatarUrl: string } }>("/users/me/photo", formData);
+                        setProfile((p) => p ? { ...p, avatarUrl: res.data.data.avatarUrl } : p);
+                      } catch {}
+                    }}
+                  />
+                </label>
               </div>
-              <div>
-                <p className="font-semibold text-gray-900 text-lg">
-                  {profile?.name ?? "User"}
-                </p>
+              <div className="flex-1">
+                {editing ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="h-9 max-w-xs"
+                      autoFocus
+                    />
+                    <Button
+                      size="sm"
+                      className="bg-purple-600 hover:bg-purple-700"
+                      disabled={saving}
+                      onClick={async () => {
+                        setSaving(true);
+                        try {
+                          await api.patch("/users/me", { name: editName.trim() });
+                          setProfile((p) => p ? { ...p, name: editName.trim() } : p);
+                          setEditing(false);
+                        } catch {}
+                        setSaving(false);
+                      }}
+                    >
+                      {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-gray-900 text-lg">
+                      {profile?.name ?? "User"}
+                    </p>
+                    <button
+                      onClick={() => { setEditName(profile?.name ?? ""); setEditing(true); }}
+                      className="text-gray-400 hover:text-purple-600"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
                 <div className="flex items-center gap-1.5 text-sm text-gray-500">
                   <Mail className="w-3.5 h-3.5" />
                   {profile?.email ?? authUser?.email}
@@ -225,7 +295,9 @@ export default function ProfilePage() {
           {[
             { href: "/orders", icon: ShoppingBag, label: "My Orders" },
             { href: "/wardrobe", icon: Shirt, label: "My Wardrobe" },
+            { href: "/wishlist", icon: Heart, label: "My Wishlist" },
             { href: "/stylist", icon: Sparkles, label: "AI Stylist" },
+            { href: "/settings", icon: Settings, label: "Settings" },
           ].map(({ href, icon: Icon, label }) => (
             <Link key={href} href={href}>
               <Card className="hover:bg-gray-50 transition-colors cursor-pointer">

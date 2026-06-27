@@ -38,6 +38,7 @@ interface Filters {
   gender: string;
   size: string;
   bodyType: string;
+  brand: string;
   minPrice: string;
   maxPrice: string;
   isTryonEnabled: boolean;
@@ -50,6 +51,7 @@ const DEFAULT_FILTERS: Filters = {
   gender: "",
   size: "",
   bodyType: "",
+  brand: "",
   minPrice: "",
   maxPrice: "",
   isTryonEnabled: false,
@@ -75,6 +77,7 @@ async function fetchProducts(filters: Filters, page: number): Promise<ProductPag
   if (filters.gender) params.set("gender", filters.gender);
   if (filters.size) params.set("size", filters.size);
   if (filters.bodyType) params.set("bodyType", filters.bodyType);
+  if (filters.brand) params.set("brand", filters.brand);
   if (filters.minPrice) params.set("minPrice", filters.minPrice);
   if (filters.maxPrice) params.set("maxPrice", filters.maxPrice);
   if (filters.isTryonEnabled) params.set("isTryonEnabled", "true");
@@ -187,6 +190,19 @@ function FilterPanel({
         </div>
       </div>
 
+      {/* Brand */}
+      <div>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+          Brand
+        </p>
+        <Input
+          placeholder="Search brand..."
+          value={filters.brand}
+          onChange={(e) => onChange("brand", e.target.value)}
+          className="h-8 text-xs"
+        />
+      </div>
+
       {/* Price range */}
       <div>
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
@@ -278,6 +294,7 @@ export default function ShopPage() {
       gender: filters.gender,
       size: filters.size,
       bodyType: filters.bodyType,
+      brand: filters.brand,
       isTryonEnabled: filters.isTryonEnabled,
       sort: filters.sort,
     }));
@@ -286,6 +303,7 @@ export default function ShopPage() {
     filters.gender,
     filters.size,
     filters.bodyType,
+    filters.brand,
     filters.isTryonEnabled,
     filters.sort,
   ]);
@@ -321,6 +339,7 @@ export default function ShopPage() {
     committed.gender,
     committed.size,
     committed.bodyType,
+    committed.brand,
     committed.minPrice,
     committed.maxPrice,
     committed.isTryonEnabled ? "1" : "",

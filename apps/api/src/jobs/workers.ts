@@ -138,7 +138,11 @@ export const bodyAnalysisWorker = new Worker<BodyAnalysisJobData>(
       throw new Error(`Unrecognised body type: ${result.body_type}`);
     }
 
-    await prisma.bodyProfile.upsert({
+    const confidence = result.confidence;
+    const highConf = confidence >= 0.8 ? confidence : confidence * 0.9;
+    const medConf = confidence * 0.85;
+
+    const profile = await prisma.bodyProfile.upsert({
       where: { userId },
       update: {
         height: result.height_cm,
@@ -147,6 +151,12 @@ export const bodyAnalysisWorker = new Worker<BodyAnalysisJobData>(
         hips: result.hips_cm,
         shoulders: result.shoulder_cm,
         bodyType: result.body_type as BodyType,
+        overallConfidence: confidence,
+        heightConfidence: highConf,
+        bustConfidence: medConf,
+        waistConfidence: medConf,
+        hipsConfidence: medConf,
+        shouldersConfidence: highConf,
       },
       create: {
         userId,
@@ -156,6 +166,25 @@ export const bodyAnalysisWorker = new Worker<BodyAnalysisJobData>(
         hips: result.hips_cm,
         shoulders: result.shoulder_cm,
         bodyType: result.body_type as BodyType,
+        overallConfidence: confidence,
+        heightConfidence: highConf,
+        bustConfidence: medConf,
+        waistConfidence: medConf,
+        hipsConfidence: medConf,
+        shouldersConfidence: highConf,
+      },
+    });
+
+    await prisma.measurementHistory.create({
+      data: {
+        bodyProfileId: profile.id,
+        height: result.height_cm,
+        bust: result.bust_cm,
+        waist: result.waist_cm,
+        hips: result.hips_cm,
+        shoulders: result.shoulder_cm,
+        bodyType: result.body_type as BodyType,
+        source: "ai_estimated",
       },
     });
   },
