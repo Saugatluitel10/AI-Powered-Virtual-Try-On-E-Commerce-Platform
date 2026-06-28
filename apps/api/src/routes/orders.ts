@@ -2,6 +2,7 @@ import { Router } from "express";
 import { verifyJwt, type AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import { enqueueEmail } from "../jobs/queues";
+import { createNotification } from "../lib/notifications";
 
 type TransactionClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
@@ -341,6 +342,14 @@ router.post("/", verifyJwt, async (req: AuthRequest, res) => {
         });
       }
     }
+
+    await createNotification(
+      req.userId!,
+      "order_status",
+      "Order Placed",
+      `Your order #${order.id.slice(0, 8).toUpperCase()} has been placed.`,
+      { orderId: order.id, status: "pending" },
+    );
 
     return res.status(201).json({
       data: {
