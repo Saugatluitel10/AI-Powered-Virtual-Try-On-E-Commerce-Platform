@@ -516,8 +516,11 @@ model Tenant {
   subscriptionId   String?
   tier             SubscriptionTier @default(FREE)
   isActive         Boolean          @default(true)
+  webhookUrl       String?
+  webhookSecret    String?
   apiKeys          ApiKey[]
   usageLogs        ApiUsageLog[]
+  webhookLogs      WebhookLog[]
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
@@ -556,4 +559,23 @@ model ApiUsageLog {
 
   @@index([tenantId, timestamp])
   @@index([apiKeyId, timestamp])
+}
+
+// ─── Webhook Delivery Logs ──────────────────────────────────────────────────
+
+model WebhookLog {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  event      String
+  payload    Json
+  url        String
+  statusCode Int?
+  response   String?
+  attempt    Int      @default(1)
+  success    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([event])
 }
