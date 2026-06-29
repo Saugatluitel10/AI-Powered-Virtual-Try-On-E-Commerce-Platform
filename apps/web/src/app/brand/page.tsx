@@ -20,6 +20,8 @@ import {
   Star,
   MessageSquare,
   Boxes,
+  Wallet,
+  Image as ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,7 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import api from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 
-type Tab = "dashboard" | "products" | "sales" | "commission" | "reviews" | "inventory";
+type Tab = "dashboard" | "products" | "sales" | "commission" | "reviews" | "inventory" | "payouts" | "banners";
 
 interface DashboardData {
   productCount: number;
@@ -107,6 +109,30 @@ interface InventoryItem {
   variants: Array<{ size: string; stock: number }>;
 }
 
+interface PayoutItem {
+  id: string;
+  amount: number;
+  currency: string;
+  periodStart: string;
+  periodEnd: string;
+  status: string;
+  paidAt: string | null;
+  reference: string | null;
+  createdAt: string;
+}
+
+interface BannerItem {
+  id: string;
+  title: string;
+  imageUrl: string;
+  linkUrl: string | null;
+  placement: string;
+  status: string;
+  startDate: string | null;
+  endDate: string | null;
+  createdAt: string;
+}
+
 export default function BrandPortalPage() {
   const [tab, setTab] = useState<Tab>("dashboard");
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
@@ -115,6 +141,8 @@ export default function BrandPortalPage() {
   const [commission, setCommission] = useState<CommissionData | null>(null);
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [payouts, setPayouts] = useState<PayoutItem[]>([]);
+  const [banners, setBanners] = useState<BannerItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -122,6 +150,8 @@ export default function BrandPortalPage() {
   const [replyText, setReplyText] = useState("");
   const [replySubmitting, setReplySubmitting] = useState(false);
   const [stockEdits, setStockEdits] = useState<Record<string, Record<string, string>>>({});
+  const [bannerForm, setBannerForm] = useState({ title: "", imageUrl: "", linkUrl: "", placement: "homepage" });
+  const [showBannerForm, setShowBannerForm] = useState(false);
 
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<string | null>(null);
@@ -168,6 +198,12 @@ export default function BrandPortalPage() {
       } else if (t === "inventory") {
         const res = await api.get<{ data: { items: InventoryItem[] } }>("/brand/inventory?pageSize=50");
         setInventory(res.data.data.items);
+      } else if (t === "payouts") {
+        const res = await api.get<{ data: PayoutItem[] }>("/brand/payouts");
+        setPayouts(res.data.data);
+      } else if (t === "banners") {
+        const res = await api.get<{ data: BannerItem[] }>("/brand/banners");
+        setBanners(res.data.data);
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to load data";
@@ -284,6 +320,8 @@ export default function BrandPortalPage() {
     { key: "commission", label: "Commission", icon: <DollarSign className="w-4 h-4" /> },
     { key: "reviews", label: "Reviews", icon: <MessageSquare className="w-4 h-4" /> },
     { key: "inventory", label: "Inventory", icon: <Boxes className="w-4 h-4" /> },
+    { key: "payouts", label: "Payouts", icon: <Wallet className="w-4 h-4" /> },
+    { key: "banners", label: "Banners", icon: <ImageIcon className="w-4 h-4" /> },
   ];
 
   return (
@@ -767,12 +805,12 @@ export default function BrandPortalPage() {
                             onClick={async () => {
                               const edits = stockEdits[item.id];
                               if (!edits) return;
-                              const variants = Object.entries(edits).map(([size, stock]) => ({
+                              const sizes = Object.entries(edits).map(([size, stock]) => ({
                                 size,
                                 stock: parseInt(stock) || 0,
                               }));
                               try {
-                                await api.patch(`/brand/inventory/${item.id}`, { variants });
+                                await api.patch(`/brand/inventory/${item.id}`, { sizes });
                                 loadTab("inventory");
                                 setStockEdits((prev) => {
                                   const next = { ...prev };
@@ -812,6 +850,172 @@ export default function BrandPortalPage() {
                     </Card>
                   ))
                 )}
+              </div>
+            )}
+
+            {/* Payouts Tab */}
+            {tab === "payouts" && (
+              <Card>
+                <CardContent className="p-6">
+                  <h3 className="font-semibold text-gray-900 mb-4">Payout History</h3>
+                  {payouts.length === 0 ? (
+                    <p className="text-gray-500 text-center py-8">No payouts yet. Payouts are processed by the platform monthly.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b text-left text-gray-500">
+                            <th className="pb-3 font-medium">Period</th>
+                            <th className="pb-3 font-medium">Amount</th>
+                            <th className="pb-3 font-medium">Status</th>
+                            <th className="pb-3 font-medium">Paid On</th>
+                            <th className="pb-3 font-medium">Reference</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {payouts.map((p) => (
+                            <tr key={p.id} className="border-b last:border-0">
+                              <td className="py-3">
+                                {new Date(p.periodStart).toLocaleDateString()} — {new Date(p.periodEnd).toLocaleDateString()}
+                              </td>
+                              <td className="py-3 font-medium text-green-600">
+                                {formatCurrency(p.amount, p.currency)}
+                              </td>
+                              <td className="py-3">
+                                <Badge className={p.status === "paid" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>
+                                  {p.status}
+                                </Badge>
+                              </td>
+                              <td className="py-3 text-gray-500">
+                                {p.paidAt ? new Date(p.paidAt).toLocaleDateString() : "—"}
+                              </td>
+                              <td className="py-3 text-gray-500 font-mono text-xs">{p.reference ?? "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Banners Tab */}
+            {tab === "banners" && (
+              <div>
+                <div className="flex gap-2 mb-4">
+                  <Button
+                    className="bg-purple-600 hover:bg-purple-700 gap-1.5"
+                    onClick={() => {
+                      setBannerForm({ title: "", imageUrl: "", linkUrl: "", placement: "homepage" });
+                      setShowBannerForm(true);
+                    }}
+                  >
+                    <Plus className="w-4 h-4" /> Submit Banner
+                  </Button>
+                </div>
+
+                {showBannerForm && (
+                  <Card className="mb-6 border-purple-200">
+                    <CardContent className="p-6">
+                      <h3 className="font-semibold text-gray-900 mb-4">New Promotional Banner</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-sm font-medium text-gray-700">Title *</label>
+                          <Input
+                            value={bannerForm.title}
+                            onChange={(e) => setBannerForm({ ...bannerForm, title: e.target.value })}
+                            placeholder="Summer Sale 2026"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-700">Placement</label>
+                          <select
+                            value={bannerForm.placement}
+                            onChange={(e) => setBannerForm({ ...bannerForm, placement: e.target.value })}
+                            className="w-full h-10 border rounded-md px-3 text-sm"
+                          >
+                            <option value="homepage">Homepage</option>
+                            <option value="category">Category Page</option>
+                            <option value="sidebar">Sidebar</option>
+                          </select>
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="text-sm font-medium text-gray-700">Banner Image URL *</label>
+                          <Input
+                            value={bannerForm.imageUrl}
+                            onChange={(e) => setBannerForm({ ...bannerForm, imageUrl: e.target.value })}
+                            placeholder="https://..."
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="text-sm font-medium text-gray-700">Link URL (where the banner points)</label>
+                          <Input
+                            value={bannerForm.linkUrl}
+                            onChange={(e) => setBannerForm({ ...bannerForm, linkUrl: e.target.value })}
+                            placeholder="https://..."
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-2 mt-4">
+                        <Button
+                          className="bg-purple-600 hover:bg-purple-700"
+                          disabled={submitting || !bannerForm.title || !bannerForm.imageUrl}
+                          onClick={async () => {
+                            setSubmitting(true);
+                            try {
+                              await api.post("/brand/banners", {
+                                title: bannerForm.title,
+                                imageUrl: bannerForm.imageUrl,
+                                linkUrl: bannerForm.linkUrl || undefined,
+                                placement: bannerForm.placement,
+                              });
+                              setShowBannerForm(false);
+                              loadTab("banners");
+                            } catch {} finally {
+                              setSubmitting(false);
+                            }
+                          }}
+                        >
+                          {submitting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                          Submit for Review
+                        </Button>
+                        <Button variant="outline" onClick={() => setShowBannerForm(false)}>Cancel</Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                <div className="space-y-2">
+                  {banners.length === 0 ? (
+                    <div className="text-center py-12 text-gray-500">No banners submitted yet.</div>
+                  ) : (
+                    banners.map((b) => (
+                      <Card key={b.id}>
+                        <CardContent className="p-4 flex items-center gap-4">
+                          <div className="relative w-24 h-14 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                            <Image src={b.imageUrl} alt={b.title} fill className="object-cover" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-gray-900 truncate">{b.title}</p>
+                            <p className="text-xs text-gray-500">
+                              {b.placement} &middot; {new Date(b.createdAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <Badge className={
+                            b.status === "approved" || b.status === "active"
+                              ? "bg-green-100 text-green-700"
+                              : b.status === "rejected"
+                                ? "bg-red-100 text-red-700"
+                                : "bg-yellow-100 text-yellow-700"
+                          }>
+                            {b.status}
+                          </Badge>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
+                </div>
               </div>
             )}
           </>

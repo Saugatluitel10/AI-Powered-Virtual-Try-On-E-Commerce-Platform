@@ -2,6 +2,7 @@ import { Router } from "express";
 import { verifyJwt, requireRole, type AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import { enqueueEmail } from "../jobs/queues";
+import { createNotification, createNotificationsForBrandMembers } from "../lib/notifications";
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -147,6 +148,22 @@ router.patch("/orders/:id/status", async (req: AuthRequest, res) => {
       payload: { orderId: order.id, status },
     });
 
+    const statusMessages: Record<string, string> = {
+      confirmed: "Your order has been confirmed.",
+      processing: "Your order is being processed.",
+      shipped: "Your order has been shipped!",
+      delivered: "Your order has been delivered.",
+      cancelled: "Your order has been cancelled.",
+      refunded: "Your refund has been processed.",
+    };
+    await createNotification(
+      order.userId,
+      "order_status",
+      `Order ${status}`,
+      statusMessages[status] ?? `Order status updated to ${status}.`,
+      { orderId: order.id, status },
+    );
+
     return res.json({
       data: {
         id: updated.id,
@@ -240,6 +257,27 @@ router.patch("/brands/:id/verify", async (req: AuthRequest, res) => {
       data: { isVerified: isVerified ?? true },
     });
 
+    if (updated.isVerified) {
+      const members = await prisma.user.findMany({
+        where: { brandId: brand.id },
+        select: { email: true },
+      });
+      for (const member of members) {
+        await enqueueEmail({
+          type: "brand_verified",
+          to: member.email,
+          payload: { brandName: updated.name },
+        });
+      }
+      await createNotificationsForBrandMembers(
+        brand.id,
+        "brand_verified",
+        "Brand Verified!",
+        `Your brand "${updated.name}" has been verified. You now have full seller access.`,
+        { brandId: brand.id },
+      );
+    }
+
     return res.json({
       data: { id: updated.id, name: updated.name, isVerified: updated.isVerified },
     });
@@ -286,6 +324,135 @@ router.patch("/returns/:id", async (req: AuthRequest, res) => {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error updating return request";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── GET /api/v1/admin/banners ──────────────────────────────────────────────
+router.get("/banners", async (req: AuthRequest, res) => {
+  try {
+    const statusFilter = req.query.status as string | undefined;
+    const where = statusFilter ? { status: statusFilter } : {};
+
+    const banners = await prisma.promoBanner.findMany({
+      where,
+      include: { brand: { select: { name: true, logo: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+
+    return res.json({
+      data: banners.map((b: typeof banners[number]) => ({
+        id: b.id,
+        title: b.title,
+        imageUrl: b.imageUrl,
+        linkUrl: b.linkUrl,
+        placement: b.placement,
+        status: b.status,
+        startDate: b.startDate?.toISOString() ?? null,
+        endDate: b.endDate?.toISOString() ?? null,
+        adminNotes: b.adminNotes,
+        brandName: b.brand.name,
+        brandLogo: b.brand.logo,
+        createdAt: b.createdAt.toISOString(),
+      })),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error fetching banners";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── PATCH /api/v1/admin/banners/:id ────────────────────────────────────────
+router.patch("/banners/:id", async (req: AuthRequest, res) => {
+  try {
+    const { status, adminNotes } = req.body as { status?: string; adminNotes?: string };
+
+    if (status && !["approved", "rejected", "active", "expired"].includes(status)) {
+      return res.status(400).json({ error: "Invalid status. Use: approved, rejected, active, expired." });
+    }
+
+    const banner = await prisma.promoBanner.findUnique({
+      where: { id: req.params.id as string },
+      include: { brand: { select: { id: true, name: true } } },
+    });
+
+    if (!banner) {
+      return res.status(404).json({ error: "Banner not found." });
+    }
+
+    const updated = await prisma.promoBanner.update({
+      where: { id: banner.id },
+      data: {
+        ...(status && { status }),
+        ...(adminNotes !== undefined && { adminNotes }),
+      },
+    });
+
+    if (status === "approved" || status === "rejected") {
+      await createNotificationsForBrandMembers(
+        banner.brand.id,
+        "brand_verified",
+        `Banner ${status}`,
+        `Your promotional banner "${banner.title}" has been ${status}.`,
+        { bannerId: banner.id, status },
+      );
+    }
+
+    return res.json({
+      data: { id: updated.id, status: updated.status, adminNotes: updated.adminNotes },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error updating banner";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── POST /api/v1/admin/payouts ─────────────────────────────────────────────
+router.post("/payouts", async (req: AuthRequest, res) => {
+  try {
+    const { brandId, amount, currency, periodStart, periodEnd, reference } = req.body as {
+      brandId: string;
+      amount: number;
+      currency?: string;
+      periodStart: string;
+      periodEnd: string;
+      reference?: string;
+    };
+
+    if (!brandId || !amount || !periodStart || !periodEnd) {
+      return res.status(400).json({ error: "brandId, amount, periodStart, and periodEnd are required." });
+    }
+
+    const brand = await prisma.brand.findUnique({ where: { id: brandId } });
+    if (!brand) {
+      return res.status(404).json({ error: "Brand not found." });
+    }
+
+    const payout = await prisma.payout.create({
+      data: {
+        brandId,
+        amount,
+        currency: currency ?? "NPR",
+        periodStart: new Date(periodStart),
+        periodEnd: new Date(periodEnd),
+        status: "paid",
+        paidAt: new Date(),
+        reference: reference ?? null,
+      },
+    });
+
+    await createNotificationsForBrandMembers(
+      brandId,
+      "payout",
+      "Payout Processed",
+      `A payout of ${currency ?? "NPR"} ${amount.toLocaleString()} has been processed for ${brand.name}.`,
+      { payoutId: payout.id, amount },
+    );
+
+    return res.status(201).json({ data: payout });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error creating payout";
     return res.status(500).json({ error: message });
   }
 });

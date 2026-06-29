@@ -115,6 +115,8 @@ model Brand {
   sizeCharts     SizeChart[]
   members        User[]        @relation("BrandMembers")
   followers      BrandFollow[]
+  payouts        Payout[]
+  promoBanners   PromoBanner[]
 }
 
 model SizeChart {
@@ -453,6 +455,47 @@ model BrandFollow {
   @@unique([userId, brandId])
   @@index([userId])
   @@index([brandId])
+}
+
+// ─── Payouts ─────────────────────────────────────────────────────────────────
+
+model Payout {
+  id          String   @id @default(cuid())
+  brandId     String
+  brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  amount      Float
+  currency    String   @default("NPR")
+  periodStart DateTime
+  periodEnd   DateTime
+  status      String   @default("pending")
+  paidAt      DateTime?
+  reference   String?
+  createdAt   DateTime @default(now())
+
+  @@index([brandId])
+  @@index([status])
+}
+
+// ─── Promotional Banners ─────────────────────────────────────────────────────
+
+model PromoBanner {
+  id          String    @id @default(cuid())
+  brandId     String
+  brand       Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  title       String
+  imageUrl    String
+  linkUrl     String?
+  placement   String    @default("homepage")
+  status      String    @default("pending")
+  startDate   DateTime?
+  endDate     DateTime?
+  adminNotes  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([brandId])
+  @@index([status])
+  @@index([placement, status])
 }
 
 // ─── SaaS / API Key Management ───────────────────────────────────────────────

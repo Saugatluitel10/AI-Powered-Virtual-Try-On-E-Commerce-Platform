@@ -2,6 +2,7 @@ import { Router } from "express";
 import { verifyJwt, requireRole, type AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import { enqueueEmail } from "../jobs/queues";
+import { createNotification } from "../lib/notifications";
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -415,6 +416,20 @@ router.patch("/orders/:id/status", async (req: AuthRequest, res) => {
       payload: { orderId: order.id, status },
     });
 
+    const statusMessages: Record<string, string> = {
+      confirmed: "Your order has been confirmed.",
+      processing: "Your order is being processed.",
+      shipped: "Your order has been shipped!",
+      delivered: "Your order has been delivered.",
+    };
+    await createNotification(
+      order.userId,
+      "order_status",
+      `Order ${status}`,
+      statusMessages[status] ?? `Order status updated to ${status}.`,
+      { orderId: order.id, status },
+    );
+
     return res.json({ data: { id: updated.id, status: updated.status } });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error updating order status";
@@ -619,6 +634,97 @@ router.post("/size-chart", async (req: AuthRequest, res) => {
     return res.json({ data: { success: true } });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error updating size chart";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── GET /api/v1/brand/payouts ──────────────────────────────────────────────
+router.get("/payouts", async (req: AuthRequest, res) => {
+  try {
+    const payouts = await prisma.payout.findMany({
+      where: { brandId: req.brandId! },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+
+    return res.json({
+      data: payouts.map((p: typeof payouts[number]) => ({
+        id: p.id,
+        amount: p.amount,
+        currency: p.currency,
+        periodStart: p.periodStart.toISOString(),
+        periodEnd: p.periodEnd.toISOString(),
+        status: p.status,
+        paidAt: p.paidAt?.toISOString() ?? null,
+        reference: p.reference,
+        createdAt: p.createdAt.toISOString(),
+      })),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error fetching payouts";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── POST /api/v1/brand/banners ────────────────────────────────────────────
+router.post("/banners", async (req: AuthRequest, res) => {
+  try {
+    const { title, imageUrl, linkUrl, placement, startDate, endDate } = req.body as {
+      title: string;
+      imageUrl: string;
+      linkUrl?: string;
+      placement?: string;
+      startDate?: string;
+      endDate?: string;
+    };
+
+    if (!title || !imageUrl) {
+      return res.status(400).json({ error: "title and imageUrl are required." });
+    }
+
+    const banner = await prisma.promoBanner.create({
+      data: {
+        brandId: req.brandId!,
+        title,
+        imageUrl,
+        linkUrl: linkUrl ?? null,
+        placement: placement ?? "homepage",
+        startDate: startDate ? new Date(startDate) : null,
+        endDate: endDate ? new Date(endDate) : null,
+      },
+    });
+
+    return res.status(201).json({ data: banner });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error creating banner";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── GET /api/v1/brand/banners ─────────────────────────────────────────────
+router.get("/banners", async (req: AuthRequest, res) => {
+  try {
+    const banners = await prisma.promoBanner.findMany({
+      where: { brandId: req.brandId! },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+
+    return res.json({
+      data: banners.map((b: typeof banners[number]) => ({
+        id: b.id,
+        title: b.title,
+        imageUrl: b.imageUrl,
+        linkUrl: b.linkUrl,
+        placement: b.placement,
+        status: b.status,
+        startDate: b.startDate?.toISOString() ?? null,
+        endDate: b.endDate?.toISOString() ?? null,
+        createdAt: b.createdAt.toISOString(),
+      })),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error fetching banners";
     return res.status(500).json({ error: message });
   }
 });

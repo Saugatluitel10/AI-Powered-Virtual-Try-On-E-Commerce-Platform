@@ -2,8 +2,9 @@ import { Worker } from "bullmq";
 import { BodyType } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { uploadTryonResult, getSignedUrl, BUCKETS } from "../lib/supabase";
-import { sendOrderConfirmation, sendOrderStatusUpdate, sendReturnRequestUpdate, sendOrderReceipt, sendRefundConfirmation, sendPriceAlert } from "../lib/resend";
+import { sendOrderConfirmation, sendOrderStatusUpdate, sendReturnRequestUpdate, sendOrderReceipt, sendRefundConfirmation, sendPriceAlert, sendBrandVerified, sendWeeklyStyleDigest } from "../lib/resend";
 import type { TryOnJobData, EmailJobData, BodyAnalysisJobData } from "./queues";
+import { enqueueWeeklyDigests } from "./scheduledJobs";
 
 const connection = { url: process.env.REDIS_URL ?? "redis://localhost:6379" };
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL ?? "http://localhost:8001";
@@ -195,6 +196,10 @@ export const bodyAnalysisWorker = new Worker<BodyAnalysisJobData>(
 export const emailWorker = new Worker<EmailJobData>(
   "email",
   async (job) => {
+    if (job.name === "weekly-digest") {
+      await enqueueWeeklyDigests();
+      return;
+    }
     const { type, to, payload } = job.data;
     if (type === "order_confirmation") {
       await sendOrderConfirmation(
@@ -240,6 +245,14 @@ export const emailWorker = new Worker<EmailJobData>(
         payload.currentPrice as number,
         payload.targetPrice as number,
         payload.currency as string
+      );
+    } else if (type === "brand_verified") {
+      await sendBrandVerified(to, payload.brandName as string);
+    } else if (type === "weekly_digest") {
+      await sendWeeklyStyleDigest(
+        to,
+        payload.userName as string,
+        payload.products as Array<{ name: string; slug: string; imageUrl: string; price: number; currency: string }>,
       );
     }
   },
