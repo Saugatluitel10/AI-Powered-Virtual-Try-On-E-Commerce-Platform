@@ -457,4 +457,242 @@ router.post("/payouts", async (req: AuthRequest, res) => {
   }
 });
 
+// ─── GET /api/v1/admin/analytics ────────────────────────────────────────────
+router.get("/analytics", async (req: AuthRequest, res) => {
+  try {
+    const daysParam = parseInt(req.query.days as string) || 30;
+    const since = new Date();
+    since.setDate(since.getDate() - daysParam);
+
+    // ── Funnel analytics ──
+    const [
+      totalUploads,
+      totalBodyScans,
+      totalTryOns,
+      completedTryOns,
+      failedTryOns,
+      totalCartAdds,
+      totalOrders,
+      totalPurchasedOrders,
+    ] = await Promise.all([
+      prisma.tryOnResult.count({ where: { createdAt: { gte: since } } }),
+      prisma.bodyProfile.count(),
+      prisma.tryOnResult.count({ where: { createdAt: { gte: since } } }),
+      prisma.tryOnResult.count({ where: { status: "completed", createdAt: { gte: since } } }),
+      prisma.tryOnResult.count({ where: { status: "failed", createdAt: { gte: since } } }),
+      prisma.cartItem.count({ where: { addedAt: { gte: since } } }),
+      prisma.order.count({ where: { createdAt: { gte: since } } }),
+      prisma.order.count({ where: { createdAt: { gte: since }, status: { notIn: ["cancelled", "refunded"] } } }),
+    ]);
+
+    const funnel = {
+      uploads: totalUploads,
+      bodyScans: totalBodyScans,
+      tryOns: totalTryOns,
+      completedTryOns,
+      failedTryOns,
+      cartAdds: totalCartAdds,
+      orders: totalOrders,
+      purchases: totalPurchasedOrders,
+    };
+
+    // ── Try-on conversion by product ──
+    const tryOnsByProduct = await prisma.tryOnResult.groupBy({
+      by: ["productId"],
+      where: { status: "completed", createdAt: { gte: since } },
+      _count: true,
+      orderBy: { _count: { productId: "desc" } },
+      take: 20,
+    });
+
+    const tryOnProductIds = tryOnsByProduct.map((t: typeof tryOnsByProduct[number]) => t.productId);
+    const purchasesByProduct = tryOnProductIds.length > 0
+      ? await prisma.orderItem.groupBy({
+          by: ["productId"],
+          where: {
+            productId: { in: tryOnProductIds },
+            order: { createdAt: { gte: since }, status: { notIn: ["cancelled", "refunded"] } },
+          },
+          _count: true,
+        })
+      : [];
+
+    const productDetails = tryOnProductIds.length > 0
+      ? await prisma.product.findMany({
+          where: { id: { in: tryOnProductIds } },
+          select: { id: true, name: true, category: true },
+        })
+      : [];
+
+    type ProductInfo = { id: string; name: string; category: string };
+    const productMap = new Map(productDetails.map((p: ProductInfo) => [p.id, p]));
+    const purchaseMap = new Map(purchasesByProduct.map((p: typeof purchasesByProduct[number]) => [p.productId, p._count]));
+
+    const conversionByProduct = tryOnsByProduct.map((t: typeof tryOnsByProduct[number]) => {
+      const product = productMap.get(t.productId);
+      const purchases = purchaseMap.get(t.productId) ?? 0;
+      return {
+        productId: t.productId,
+        productName: product?.name ?? "Unknown",
+        category: product?.category ?? "Unknown",
+        tryOns: t._count,
+        purchases,
+        conversionRate: t._count > 0 ? parseFloat(((purchases / t._count) * 100).toFixed(1)) : 0,
+      };
+    });
+
+    // ── Try-on conversion by category ──
+    const categoryMap = new Map<string, { tryOns: number; purchases: number }>();
+    for (const item of conversionByProduct) {
+      const cat = categoryMap.get(item.category) ?? { tryOns: 0, purchases: 0 };
+      cat.tryOns += item.tryOns;
+      cat.purchases += item.purchases;
+      categoryMap.set(item.category, cat);
+    }
+    const conversionByCategory = Array.from(categoryMap.entries()).map(([category, data]) => ({
+      category,
+      tryOns: data.tryOns,
+      purchases: data.purchases,
+      conversionRate: data.tryOns > 0 ? parseFloat(((data.purchases / data.tryOns) * 100).toFixed(1)) : 0,
+    }));
+
+    // ── Return rate: try-on users vs non-try-on ──
+    const usersWithTryOns = await prisma.tryOnResult.findMany({
+      where: { status: "completed" },
+      select: { userId: true },
+      distinct: ["userId"],
+    });
+    const tryOnUserIds = new Set(usersWithTryOns.map((u: typeof usersWithTryOns[number]) => u.userId));
+
+    const allReturnRequests = await prisma.returnRequest.findMany({
+      where: { createdAt: { gte: since } },
+      select: { userId: true },
+    });
+    const allOrdersForReturn = await prisma.order.findMany({
+      where: { createdAt: { gte: since }, status: { notIn: ["cancelled"] } },
+      select: { userId: true },
+    });
+
+    let tryOnReturns = 0, nonTryOnReturns = 0;
+    for (const r of allReturnRequests) {
+      if (tryOnUserIds.has(r.userId)) tryOnReturns++;
+      else nonTryOnReturns++;
+    }
+    let tryOnOrders = 0, nonTryOnOrders = 0;
+    for (const o of allOrdersForReturn) {
+      if (tryOnUserIds.has(o.userId)) tryOnOrders++;
+      else nonTryOnOrders++;
+    }
+
+    const returnRates = {
+      tryOnUsers: {
+        orders: tryOnOrders,
+        returns: tryOnReturns,
+        rate: tryOnOrders > 0 ? parseFloat(((tryOnReturns / tryOnOrders) * 100).toFixed(1)) : 0,
+      },
+      nonTryOnUsers: {
+        orders: nonTryOnOrders,
+        returns: nonTryOnReturns,
+        rate: nonTryOnOrders > 0 ? parseFloat(((nonTryOnReturns / nonTryOnOrders) * 100).toFixed(1)) : 0,
+      },
+    };
+
+    // ── Revenue by brand ──
+    const orderItemsWithBrand = await prisma.orderItem.findMany({
+      where: { order: { createdAt: { gte: since }, status: { notIn: ["cancelled", "refunded"] } } },
+      select: {
+        priceAtTime: true,
+        quantity: true,
+        product: { select: { brandId: true, category: true } },
+        order: { select: { createdAt: true } },
+      },
+    });
+
+    const brandRevenue = new Map<string, number>();
+    const categoryRevenue = new Map<string, number>();
+    const monthlyRevenue = new Map<string, number>();
+
+    for (const oi of orderItemsWithBrand) {
+      const lineTotal = oi.priceAtTime * oi.quantity;
+      brandRevenue.set(oi.product.brandId, (brandRevenue.get(oi.product.brandId) ?? 0) + lineTotal);
+      categoryRevenue.set(oi.product.category, (categoryRevenue.get(oi.product.category) ?? 0) + lineTotal);
+      const monthKey = oi.order.createdAt.toISOString().slice(0, 7);
+      monthlyRevenue.set(monthKey, (monthlyRevenue.get(monthKey) ?? 0) + lineTotal);
+    }
+
+    const brandIds = Array.from(brandRevenue.keys());
+    const brands = brandIds.length > 0
+      ? await prisma.brand.findMany({
+          where: { id: { in: brandIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const brandNameMap = new Map(brands.map((b: typeof brands[number]) => [b.id, b.name]));
+
+    const revenueByBrand = Array.from(brandRevenue.entries())
+      .map(([brandId, revenue]) => ({ brandId, brandName: brandNameMap.get(brandId) ?? "Unknown", revenue }))
+      .sort((a, b) => b.revenue - a.revenue);
+
+    const revenueByCategory = Array.from(categoryRevenue.entries())
+      .map(([category, revenue]) => ({ category, revenue }))
+      .sort((a, b) => b.revenue - a.revenue);
+
+    const revenueByMonth = Array.from(monthlyRevenue.entries())
+      .map(([month, revenue]) => ({ month, revenue }))
+      .sort((a, b) => a.month.localeCompare(b.month));
+
+    // ── AI model accuracy ──
+    const [totalRated, positiveRatings, avgProcessingTime, tryOnStats] = await Promise.all([
+      prisma.tryOnResult.count({ where: { qualityRating: { not: null } } }),
+      prisma.tryOnResult.count({ where: { qualityRating: 1 } }),
+      prisma.tryOnResult.aggregate({
+        where: { status: "completed", processingTimeMs: { not: null } },
+        _avg: { processingTimeMs: true },
+      }),
+      prisma.tryOnResult.groupBy({
+        by: ["status"],
+        _count: true,
+      }),
+    ]);
+
+    const statusCounts: Record<string, number> = {};
+    for (const s of tryOnStats) {
+      statusCounts[s.status] = s._count;
+    }
+    const totalAttempts = Object.values(statusCounts).reduce((a, b) => a + b, 0);
+
+    const aiModelAccuracy = {
+      totalRated,
+      positiveRatings,
+      satisfactionRate: totalRated > 0 ? parseFloat(((positiveRatings / totalRated) * 100).toFixed(1)) : 0,
+      avgProcessingTimeMs: Math.round(avgProcessingTime._avg.processingTimeMs ?? 0),
+      successRate: totalAttempts > 0
+        ? parseFloat((((statusCounts["completed"] ?? 0) / totalAttempts) * 100).toFixed(1))
+        : 0,
+      failureRate: totalAttempts > 0
+        ? parseFloat((((statusCounts["failed"] ?? 0) / totalAttempts) * 100).toFixed(1))
+        : 0,
+      totalAttempts,
+      statusBreakdown: statusCounts,
+    };
+
+    return res.json({
+      data: {
+        period: { days: daysParam, since: since.toISOString() },
+        funnel,
+        conversionByProduct,
+        conversionByCategory,
+        returnRates,
+        revenueByBrand,
+        revenueByCategory,
+        revenueByMonth,
+        aiModelAccuracy,
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error fetching analytics";
+    return res.status(500).json({ error: message });
+  }
+});
+
 export default router;

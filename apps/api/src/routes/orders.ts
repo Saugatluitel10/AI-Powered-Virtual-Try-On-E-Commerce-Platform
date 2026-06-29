@@ -117,6 +117,104 @@ router.get("/:id", verifyJwt, async (req: AuthRequest, res) => {
   }
 });
 
+// ─── GET /api/v1/orders/:id/invoice/pdf ──────────────────────────────────────
+router.get("/:id/invoice/pdf", verifyJwt, async (req: AuthRequest, res) => {
+  try {
+    const order = await prisma.order.findFirst({
+      where: { id: req.params.id as string, userId: req.userId! },
+      include: {
+        user: { select: { name: true, email: true } },
+        items: {
+          include: { product: { select: { name: true } } },
+        },
+      },
+    });
+
+    if (!order) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    const PDFDocument = (await import("pdfkit")).default;
+    const doc = new PDFDocument({ size: "A4", margin: 50 });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="invoice-${order.id.slice(0, 8).toUpperCase()}.pdf"`,
+    );
+    doc.pipe(res);
+
+    const fmtCurrency = (amount: number) =>
+      order.currency === "NPR" ? `Rs. ${amount.toLocaleString()}` : `${order.currency} ${amount.toFixed(2)}`;
+
+    const addr = (order.shippingAddress ?? {}) as Record<string, string>;
+
+    doc.fontSize(22).text("VTryon Invoice", { align: "left" });
+    doc.moveDown(0.3);
+    doc.fontSize(10).fillColor("#666")
+      .text(`Invoice #${order.id.slice(0, 8).toUpperCase()}  |  ${new Date(order.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`);
+    doc.moveDown(1.5);
+
+    doc.fillColor("#000").fontSize(11).text("Bill To:", { continued: false });
+    doc.fontSize(10).fillColor("#333")
+      .text(order.user.name ?? "Customer")
+      .text(order.user.email);
+    if (addr.street) doc.text(addr.street);
+    if (addr.city) doc.text(`${addr.city}${addr.state ? `, ${addr.state}` : ""} ${addr.zip ?? ""}`);
+    doc.moveDown(1);
+
+    doc.fillColor("#000").fontSize(11).text("Payment:", { continued: false });
+    doc.fontSize(10).fillColor("#333")
+      .text(`Method: ${order.paymentMethod ?? "N/A"}`)
+      .text(`Status: ${order.status}`);
+    if (order.paymentRef) doc.text(`Ref: ${order.paymentRef}`);
+    doc.moveDown(1.5);
+
+    const tableTop = doc.y;
+    const col = { item: 50, size: 280, qty: 340, price: 400, total: 480 };
+
+    doc.fontSize(9).fillColor("#666");
+    doc.text("ITEM", col.item, tableTop);
+    doc.text("SIZE", col.size, tableTop);
+    doc.text("QTY", col.qty, tableTop);
+    doc.text("PRICE", col.price, tableTop);
+    doc.text("TOTAL", col.total, tableTop);
+
+    doc.moveTo(50, tableTop + 15).lineTo(545, tableTop + 15).strokeColor("#e5e5e5").stroke();
+
+    let y = tableTop + 25;
+    doc.fillColor("#1a1a1a").fontSize(10);
+    for (const item of order.items) {
+      const lineTotal = item.priceAtTime * item.quantity;
+      doc.text(item.product.name, col.item, y, { width: 220 });
+      doc.text(item.size, col.size, y);
+      doc.text(String(item.quantity), col.qty, y);
+      doc.text(fmtCurrency(item.priceAtTime), col.price, y);
+      doc.text(fmtCurrency(lineTotal), col.total, y);
+      y += 20;
+    }
+
+    doc.moveTo(50, y + 5).lineTo(545, y + 5).strokeColor("#1a1a1a").lineWidth(1.5).stroke();
+    y += 15;
+    doc.fontSize(12).text("Total", col.price, y);
+    doc.text(fmtCurrency(order.totalAmount), col.total, y);
+
+    if (order.discountAmount > 0) {
+      y += 20;
+      doc.fontSize(10).fillColor("#666").text("Discount", col.price, y);
+      doc.text(`-${fmtCurrency(order.discountAmount)}`, col.total, y);
+    }
+
+    doc.fontSize(8).fillColor("#999")
+      .text("VTryon — AI-Powered Virtual Try-On Platform", 50, 750, { align: "center" });
+
+    doc.end();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error generating PDF invoice";
+    return res.status(500).json({ error: message });
+  }
+});
+
 // ─── GET /api/v1/orders/:id/invoice ──────────────────────────────────────────
 // Returns a simple HTML invoice that can be printed/saved as PDF from the browser
 router.get("/:id/invoice", verifyJwt, async (req: AuthRequest, res) => {

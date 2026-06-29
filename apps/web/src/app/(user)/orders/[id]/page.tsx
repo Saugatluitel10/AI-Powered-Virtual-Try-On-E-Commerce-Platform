@@ -212,13 +212,13 @@ export default function OrderDetailPage() {
           </div>
           <div className="ml-auto flex gap-2">
             <a
-              href={`${apiUrl}/api/v1/orders/${order.id}/invoice`}
+              href={`${apiUrl}/api/v1/orders/${order.id}/invoice/pdf`}
               target="_blank"
               rel="noopener noreferrer"
             >
               <Button variant="outline" size="sm" className="gap-1.5">
                 <FileText className="w-4 h-4" />
-                Invoice
+                Download Invoice
               </Button>
             </a>
             {order.status === "pending" && (
