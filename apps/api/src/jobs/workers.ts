@@ -3,6 +3,7 @@ import { BodyType } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { uploadTryonResult, getSignedUrl, BUCKETS } from "../lib/supabase";
 import { sendOrderConfirmation, sendOrderStatusUpdate, sendReturnRequestUpdate, sendOrderReceipt, sendRefundConfirmation, sendPriceAlert, sendBrandVerified, sendWeeklyStyleDigest } from "../lib/resend";
+import { deliverWebhook } from "../lib/webhooks";
 import type { TryOnJobData, EmailJobData, BodyAnalysisJobData } from "./queues";
 import { enqueueWeeklyDigests } from "./scheduledJobs";
 
@@ -94,6 +95,22 @@ export const tryOnWorker = new Worker<TryOnJobData>(
         processingTimeMs: result.processing_time_ms,
       },
     });
+
+    if (userId === "api") {
+      const apiLog = await prisma.apiUsageLog.findFirst({
+        where: { endpoint: { contains: "tryon" } },
+        orderBy: { timestamp: "desc" },
+        select: { tenantId: true },
+      });
+      if (apiLog) {
+        deliverWebhook(apiLog.tenantId, "tryon.completed", {
+          jobId: resultId,
+          status: "completed",
+          resultImageUrl: storagePath,
+          processingTimeMs: result.processing_time_ms,
+        }).catch(() => {});
+      }
+    }
   },
   { connection, concurrency: 3 }
 );

@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { Router } from "express";
 import { verifyJwt, requireRole, type AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
@@ -206,6 +207,101 @@ router.post("/:slug/subscribe", async (req: AuthRequest, res) => {
     return res.json({ data: { checkoutUrl: session.url } });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error creating subscription";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── PUT /api/v1/tenants/:slug/webhook — register or update webhook URL ────
+router.put("/:slug/webhook", async (req: AuthRequest, res) => {
+  try {
+    const tenant = await prisma.tenant.findUnique({ where: { slug: req.params.slug as string } });
+    if (!tenant) return res.status(404).json({ error: "Tenant not found." });
+
+    const { url } = req.body as { url?: string | null };
+
+    if (url !== null && url !== undefined) {
+      try {
+        new URL(url);
+      } catch {
+        return res.status(400).json({ error: "Invalid URL." });
+      }
+      if (!url.startsWith("https://")) {
+        return res.status(400).json({ error: "Webhook URL must use HTTPS." });
+      }
+    }
+
+    const webhookSecret = url
+      ? tenant.webhookSecret ?? crypto.randomBytes(32).toString("hex")
+      : null;
+
+    await prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { webhookUrl: url ?? null, webhookSecret },
+    });
+
+    return res.json({
+      data: {
+        webhookUrl: url ?? null,
+        webhookSecret: url ? webhookSecret : null,
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error updating webhook";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── GET /api/v1/tenants/:slug/webhook/logs — recent webhook deliveries ────
+router.get("/:slug/webhook/logs", async (req: AuthRequest, res) => {
+  try {
+    const tenant = await prisma.tenant.findUnique({ where: { slug: req.params.slug as string } });
+    if (!tenant) return res.status(404).json({ error: "Tenant not found." });
+
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize as string) || 20));
+
+    const [total, logs] = await Promise.all([
+      prisma.webhookLog.count({ where: { tenantId: tenant.id } }),
+      prisma.webhookLog.findMany({
+        where: { tenantId: tenant.id },
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true, event: true, statusCode: true, success: true,
+          attempt: true, createdAt: true, url: true,
+        },
+      }),
+    ]);
+
+    return res.json({
+      data: {
+        items: logs,
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error fetching webhook logs";
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── POST /api/v1/tenants/:slug/webhook/test — send a test event ───────────
+router.post("/:slug/webhook/test", async (req: AuthRequest, res) => {
+  try {
+    const tenant = await prisma.tenant.findUnique({ where: { slug: req.params.slug as string } });
+    if (!tenant) return res.status(404).json({ error: "Tenant not found." });
+    if (!tenant.webhookUrl) return res.status(400).json({ error: "No webhook URL configured." });
+
+    const { deliverWebhook } = await import("../lib/webhooks");
+    await deliverWebhook(tenant.id, "test.ping", { message: "Webhook test event" });
+
+    return res.json({ data: { sent: true } });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error sending test webhook";
     return res.status(500).json({ error: message });
   }
 });
