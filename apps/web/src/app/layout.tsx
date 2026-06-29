@@ -8,6 +8,7 @@ import Footer from "@/components/layout/Footer";
 import Providers from "./providers";
 import { cn } from "@/lib/utils";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
+import { WebVitals } from "@/components/WebVitals";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 const inter = Inter({ subsets: ["latin"] });
@@ -63,6 +64,7 @@ export default async function RootLayout({
           </Providers>
         </NextIntlClientProvider>
         <ServiceWorkerRegistrar />
+        <WebVitals />
       </body>
     </html>
   );
