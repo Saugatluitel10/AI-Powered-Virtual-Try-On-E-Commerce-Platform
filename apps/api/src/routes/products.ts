@@ -426,4 +426,37 @@ router.delete("/:id", verifyJwt, (_req, res) => {
   res.json({ ok: true, route: "DELETE /products/:id" });
 });
 
+// ─── GET /api/v1/products/banners/active — active sponsored banners ────────
+router.get("/banners/active", cacheResponse(300, "banners"), async (_req, res) => {
+  try {
+    const now = new Date();
+    const banners = await prisma.promoBanner.findMany({
+      where: {
+        status: "active",
+        OR: [
+          { startDate: null, endDate: null },
+          { startDate: { lte: now }, endDate: { gte: now } },
+          { startDate: { lte: now }, endDate: null },
+          { startDate: null, endDate: { gte: now } },
+        ],
+      },
+      select: {
+        id: true,
+        title: true,
+        imageUrl: true,
+        linkUrl: true,
+        placement: true,
+        brand: { select: { name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    });
+
+    return res.json({ data: banners });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error fetching banners";
+    return res.status(500).json({ error: message });
+  }
+});
+
 export default router;
