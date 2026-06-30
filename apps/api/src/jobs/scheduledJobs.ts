@@ -1,5 +1,39 @@
 import { prisma } from "../lib/prisma";
+import { supabase, BUCKETS } from "../lib/supabase";
 import { enqueueEmail } from "./queues";
+
+export async function cleanupExpiredPhotos() {
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+  const expiredProfiles = await prisma.bodyProfile.findMany({
+    where: {
+      photoUrl: { not: null },
+      updatedAt: { lt: cutoff },
+    },
+    select: { id: true, userId: true, photoUrl: true },
+  });
+
+  for (const profile of expiredProfiles) {
+    if (!profile.photoUrl) continue;
+
+    try {
+      await supabase.storage
+        .from(BUCKETS.USER_PHOTOS)
+        .remove([profile.photoUrl]);
+
+      await prisma.bodyProfile.update({
+        where: { id: profile.id },
+        data: { photoUrl: null },
+      });
+    } catch (err) {
+      console.error(`[PhotoCleanup] Failed to delete photo for user ${profile.userId}:`, err);
+    }
+  }
+
+  if (expiredProfiles.length > 0) {
+    console.log(`[PhotoCleanup] Deleted ${expiredProfiles.length} expired user photos.`);
+  }
+}
 
 export async function enqueueWeeklyDigests() {
   const users = await prisma.user.findMany({
