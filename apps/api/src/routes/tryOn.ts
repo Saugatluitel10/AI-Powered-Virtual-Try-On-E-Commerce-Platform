@@ -44,6 +44,32 @@ router.post("/", verifyJwt, async (req: AuthRequest, res) => {
       return res.status(400).json({ error: "Product has no images." });
     }
 
+    // Free-tier limit: 3 try-ons per month
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId! },
+      select: { tier: true },
+    });
+
+    if (user?.tier === "FREE") {
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+
+      const monthlyCount = await prisma.tryOnResult.count({
+        where: {
+          userId: req.userId!,
+          createdAt: { gte: monthStart },
+        },
+      });
+
+      if (monthlyCount >= 3) {
+        return res.status(429).json({
+          error: "Free tier limit reached (3 try-ons/month). Upgrade to Premium for unlimited try-ons.",
+          statusCode: 429,
+        });
+      }
+    }
+
     // Check for existing completed result (dedup)
     const existing = await prisma.tryOnResult.findFirst({
       where: {

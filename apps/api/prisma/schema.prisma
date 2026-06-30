@@ -12,6 +12,11 @@ enum Role {
   ADMIN
 }
 
+enum UserTier {
+  FREE
+  PREMIUM
+}
+
 enum BodyType {
   HOURGLASS
   PEAR
@@ -27,6 +32,7 @@ model User {
   avatarUrl           String?
   supabaseId          String               @unique
   role                Role                 @default(CUSTOMER)
+  tier                UserTier             @default(FREE)
   brandId             String?
   brand               Brand?               @relation("BrandMembers", fields: [brandId], references: [id])
   emailMarketing      Boolean              @default(true)
