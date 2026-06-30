@@ -5,7 +5,7 @@ import { uploadTryonResult, getSignedUrl, BUCKETS } from "../lib/supabase";
 import { sendOrderConfirmation, sendOrderStatusUpdate, sendReturnRequestUpdate, sendOrderReceipt, sendRefundConfirmation, sendPriceAlert, sendBrandVerified, sendWeeklyStyleDigest } from "../lib/resend";
 import { deliverWebhook } from "../lib/webhooks";
 import type { TryOnJobData, EmailJobData, BodyAnalysisJobData } from "./queues";
-import { enqueueWeeklyDigests } from "./scheduledJobs";
+import { enqueueWeeklyDigests, cleanupExpiredPhotos } from "./scheduledJobs";
 
 const connection = { url: process.env.REDIS_URL ?? "redis://localhost:6379" };
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL ?? "http://localhost:8001";
@@ -156,6 +156,13 @@ export const bodyAnalysisWorker = new Worker<BodyAnalysisJobData>(
       throw new Error(`Unrecognised body type: ${result.body_type}`);
     }
 
+    const MIN_POSE_CONFIDENCE = 0.8;
+    if (result.confidence < MIN_POSE_CONFIDENCE) {
+      throw new Error(
+        `Pose confidence too low (${(result.confidence * 100).toFixed(0)}%). Please upload a clearer full-body photo with good lighting.`
+      );
+    }
+
     const confidence = result.confidence;
     const highConf = confidence >= 0.8 ? confidence : confidence * 0.9;
     const medConf = confidence * 0.85;
@@ -215,6 +222,10 @@ export const emailWorker = new Worker<EmailJobData>(
   async (job) => {
     if (job.name === "weekly-digest") {
       await enqueueWeeklyDigests();
+      return;
+    }
+    if (job.name === "photo-cleanup") {
+      await cleanupExpiredPhotos();
       return;
     }
     const { type, to, payload } = job.data;

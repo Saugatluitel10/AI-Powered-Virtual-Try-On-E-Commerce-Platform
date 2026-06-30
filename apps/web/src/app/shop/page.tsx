@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { SlidersHorizontal, Search, X, ShoppingBag, LayoutGrid, List } from "lucide-react";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { SlidersHorizontal, Search, X, ShoppingBag, LayoutGrid, List, Megaphone } from "lucide-react";
 import api from "@/lib/api";
 import type { ProductListItem } from "@/types/product";
 import ProductCard from "@/components/catalog/ProductCard";
@@ -30,6 +30,21 @@ const BODY_TYPES = [
   { value: "RECTANGLE", label: "Rectangle" },
   { value: "INVERTED_TRIANGLE", label: "Inverted Triangle" },
 ];
+
+// ─── Sponsored banners ───────────────────────────────────────────────────────
+interface PromoBanner {
+  id: string;
+  title: string;
+  imageUrl: string;
+  linkUrl: string | null;
+  placement: string;
+  brand: { name: string };
+}
+
+async function fetchBanners(): Promise<PromoBanner[]> {
+  const res = await api.get<{ data: PromoBanner[] }>("/products/banners/active");
+  return res.data.data;
+}
 
 // ─── Filter state ─────────────────────────────────────────────────────────────
 interface Filters {
@@ -248,6 +263,11 @@ function FilterPanel({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function ShopPage() {
   const { profile } = useBodyProfileStore();
+  const { data: banners } = useQuery({
+    queryKey: ["banners-active"],
+    queryFn: fetchBanners,
+    staleTime: 5 * 60 * 1000,
+  });
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [search, setSearch] = useState("");
   const [committed, setCommitted] = useState<Filters>(DEFAULT_FILTERS);
@@ -496,6 +516,38 @@ export default function ShopPage() {
 
         {/* Product grid */}
         <div className="flex-1 min-w-0">
+          {/* Sponsored banners */}
+          {banners && banners.length > 0 && (
+            <div className="mb-6 space-y-3">
+              {banners.map((banner) => (
+                <a
+                  key={banner.id}
+                  href={banner.linkUrl ?? "#"}
+                  className="block relative rounded-xl overflow-hidden group"
+                  aria-label={`Sponsored: ${banner.title} by ${banner.brand.name}`}
+                >
+                  <img
+                    src={banner.imageUrl}
+                    alt={banner.title}
+                    className="w-full h-32 sm:h-40 object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-r from-black/60 to-transparent flex items-center">
+                    <div className="px-6">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Megaphone className="w-3 h-3 text-yellow-400" />
+                        <span className="text-[10px] text-yellow-400 uppercase font-semibold tracking-wider">
+                          Sponsored
+                        </span>
+                      </div>
+                      <p className="text-white font-bold text-lg">{banner.title}</p>
+                      <p className="text-white/70 text-xs">{banner.brand.name}</p>
+                    </div>
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+
           {/* Result count */}
           <p className="text-sm text-gray-500 mb-4">
             {isFetching && allProducts.length === 0
