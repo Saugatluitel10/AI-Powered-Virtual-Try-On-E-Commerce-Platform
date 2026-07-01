@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { verifyJwt, type AuthRequest } from "../middleware/auth";
+import { validate } from "../middleware/validate";
+import { createReviewSchema } from "../schemas";
 import { prisma } from "../lib/prisma";
 
 const router: ReturnType<typeof Router> = Router();
@@ -58,19 +60,9 @@ router.get("/product/:productId", async (req, res) => {
 });
 
 // ─── POST /api/v1/reviews ───────────────────────────────────────────────────
-router.post("/", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/", verifyJwt, validate(createReviewSchema), async (req: AuthRequest, res) => {
   try {
-    const { productId, orderId, rating, title, comment } = req.body as {
-      productId?: string;
-      orderId?: string;
-      rating?: number;
-      title?: string;
-      comment?: string;
-    };
-
-    if (!productId || !rating || rating < 1 || rating > 5) {
-      return res.status(400).json({ error: "productId and rating (1-5) are required." });
-    }
+    const { productId, orderId, rating, title, comment } = req.body;
 
     if (orderId) {
       const order = await prisma.order.findFirst({

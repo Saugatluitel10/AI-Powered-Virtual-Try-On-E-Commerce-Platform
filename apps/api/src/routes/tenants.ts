@@ -1,6 +1,8 @@
 import crypto from "crypto";
 import { Router } from "express";
 import { verifyJwt, requireRole, type AuthRequest } from "../middleware/auth";
+import { validate } from "../middleware/validate";
+import { createTenantSchema, createApiKeySchema, webhookUrlSchema, subscribeTenantSchema } from "../schemas";
 import { prisma } from "../lib/prisma";
 import { generateApiKey } from "../middleware/apiKeyAuth";
 import { stripe } from "../lib/stripe";
@@ -10,17 +12,9 @@ const router: ReturnType<typeof Router> = Router();
 router.use(verifyJwt);
 
 // ─── POST /api/v1/tenants — create a new SaaS tenant ────────────────────────
-router.post("/", async (req: AuthRequest, res) => {
+router.post("/", validate(createTenantSchema), async (req: AuthRequest, res) => {
   try {
-    const { name, slug } = req.body as { name?: string; slug?: string };
-    if (!name || !slug) {
-      return res.status(400).json({ error: "name and slug are required." });
-    }
-
-    const slugPattern = /^[a-z0-9-]+$/;
-    if (!slugPattern.test(slug)) {
-      return res.status(400).json({ error: "slug must be lowercase alphanumeric with hyphens." });
-    }
+    const { name, slug } = req.body;
 
     const existing = await prisma.tenant.findUnique({ where: { slug } });
     if (existing) {
@@ -88,12 +82,12 @@ router.get("/:slug", async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/v1/tenants/:slug/api-keys — generate a new API key ──────────
-router.post("/:slug/api-keys", async (req: AuthRequest, res) => {
+router.post("/:slug/api-keys", validate(createApiKeySchema), async (req: AuthRequest, res) => {
   try {
     const tenant = await prisma.tenant.findUnique({ where: { slug: req.params.slug as string } });
     if (!tenant) return res.status(404).json({ error: "Tenant not found." });
 
-    const { label, scopes } = req.body as { label?: string; scopes?: string[] };
+    const { label, scopes } = req.body;
     const { raw, hash, prefix } = generateApiKey();
 
     const apiKey = await prisma.apiKey.create({
@@ -101,8 +95,8 @@ router.post("/:slug/api-keys", async (req: AuthRequest, res) => {
         tenantId: tenant.id,
         keyHash: hash,
         keyPrefix: prefix,
-        label: label ?? "API Key",
-        scopes: scopes ?? ["tryon:read", "tryon:write", "products:read"],
+        label,
+        scopes,
       },
     });
 
@@ -178,13 +172,13 @@ router.get("/:slug/usage", async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/v1/tenants/:slug/subscribe — start Stripe subscription ──────
-router.post("/:slug/subscribe", async (req: AuthRequest, res) => {
+router.post("/:slug/subscribe", validate(subscribeTenantSchema), async (req: AuthRequest, res) => {
   try {
     const tenant = await prisma.tenant.findUnique({ where: { slug: req.params.slug as string } });
     if (!tenant) return res.status(404).json({ error: "Tenant not found." });
     if (!tenant.stripeCustomerId) return res.status(400).json({ error: "No billing account." });
 
-    const { tier } = req.body as { tier?: string };
+    const { tier } = req.body;
 
     const priceMap: Record<string, string> = {
       STARTER: process.env.STRIPE_PRICE_STARTER ?? "",
@@ -192,8 +186,8 @@ router.post("/:slug/subscribe", async (req: AuthRequest, res) => {
       ENTERPRISE: process.env.STRIPE_PRICE_ENTERPRISE ?? "",
     };
 
-    const priceId = priceMap[tier ?? ""];
-    if (!priceId) return res.status(400).json({ error: "Invalid tier. Use STARTER, GROWTH, or ENTERPRISE." });
+    const priceId = priceMap[tier];
+    if (!priceId) return res.status(400).json({ error: "Stripe price not configured for this tier." });
 
     const session = await stripe.checkout.sessions.create({
       customer: tenant.stripeCustomerId,
@@ -201,7 +195,7 @@ router.post("/:slug/subscribe", async (req: AuthRequest, res) => {
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${process.env.FRONTEND_URL ?? "http://localhost:3000"}/dashboard/billing?success=1`,
       cancel_url: `${process.env.FRONTEND_URL ?? "http://localhost:3000"}/dashboard/billing?cancelled=1`,
-      metadata: { tenantId: tenant.id, tier: tier ?? "" },
+      metadata: { tenantId: tenant.id, tier },
     });
 
     return res.json({ data: { checkoutUrl: session.url } });
@@ -212,23 +206,12 @@ router.post("/:slug/subscribe", async (req: AuthRequest, res) => {
 });
 
 // ─── PUT /api/v1/tenants/:slug/webhook — register or update webhook URL ────
-router.put("/:slug/webhook", async (req: AuthRequest, res) => {
+router.put("/:slug/webhook", validate(webhookUrlSchema), async (req: AuthRequest, res) => {
   try {
     const tenant = await prisma.tenant.findUnique({ where: { slug: req.params.slug as string } });
     if (!tenant) return res.status(404).json({ error: "Tenant not found." });
 
-    const { url } = req.body as { url?: string | null };
-
-    if (url !== null && url !== undefined) {
-      try {
-        new URL(url);
-      } catch {
-        return res.status(400).json({ error: "Invalid URL." });
-      }
-      if (!url.startsWith("https://")) {
-        return res.status(400).json({ error: "Webhook URL must use HTTPS." });
-      }
-    }
+    const { url } = req.body;
 
     const webhookSecret = url
       ? tenant.webhookSecret ?? crypto.randomBytes(32).toString("hex")

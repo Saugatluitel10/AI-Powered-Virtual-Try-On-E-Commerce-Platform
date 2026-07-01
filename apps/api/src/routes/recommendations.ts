@@ -1,6 +1,8 @@
 import { Router } from "express";
 import Anthropic from "@anthropic-ai/sdk";
 import { verifyJwt, type AuthRequest } from "../middleware/auth";
+import { validate } from "../middleware/validate";
+import { chatMessageSchema } from "../schemas";
 import { prisma } from "../lib/prisma";
 import { cacheResponse } from "../middleware/cache";
 
@@ -49,16 +51,9 @@ Guidelines:
 }
 
 // POST /api/v1/recommendations/chat
-router.post("/chat", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/chat", verifyJwt, validate(chatMessageSchema), async (req: AuthRequest, res) => {
   try {
-    const { message, conversationId } = req.body as {
-      message?: string;
-      conversationId?: string;
-    };
-
-    if (!message || message.trim().length === 0) {
-      return res.status(400).json({ error: "Message is required." });
-    }
+    const { message, conversationId } = req.body;
 
     const [bodyProfile, styleProfile, products] = await Promise.all([
       prisma.bodyProfile.findUnique({

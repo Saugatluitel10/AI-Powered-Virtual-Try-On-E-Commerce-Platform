@@ -1,6 +1,8 @@
 import { Router, type Request } from "express";
 import crypto from "crypto";
 import { verifyJwt, type AuthRequest } from "../middleware/auth";
+import { validate } from "../middleware/validate";
+import { addWardrobeSchema, moveWardrobeSchema, createCollectionSchema } from "../schemas";
 import { prisma } from "../lib/prisma";
 import { getSignedUrl, BUCKETS } from "../lib/supabase";
 
@@ -111,17 +113,9 @@ router.get("/", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/v1/wardrobe ──────────────────────────────────────────────────
-router.post("/", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/", verifyJwt, validate(addWardrobeSchema), async (req: AuthRequest, res) => {
   try {
-    const { productId, tryOnResultId, collectionId } = req.body as {
-      productId?: string;
-      tryOnResultId?: string;
-      collectionId?: string;
-    };
-
-    if (!productId) {
-      return res.status(400).json({ error: "productId is required." });
-    }
+    const { productId, tryOnResultId, collectionId } = req.body;
 
     const product = await prisma.product.findUnique({
       where: { id: productId },
@@ -195,9 +189,9 @@ router.delete("/:id", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // ─── PATCH /api/v1/wardrobe/:id/move ────────────────────────────────────────
-router.patch("/:id/move", verifyJwt, async (req: AuthRequest, res) => {
+router.patch("/:id/move", verifyJwt, validate(moveWardrobeSchema), async (req: AuthRequest, res) => {
   try {
-    const { collectionId } = req.body as { collectionId: string | null };
+    const { collectionId } = req.body;
 
     const item = await prisma.wardrobeItem.findFirst({
       where: { id: req.params.id as string, userId: req.userId! },
@@ -259,12 +253,9 @@ router.get("/collections", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/v1/wardrobe/collections ───────────────────────────────────────
-router.post("/collections", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/collections", verifyJwt, validate(createCollectionSchema), async (req: AuthRequest, res) => {
   try {
-    const { name } = req.body as { name?: string };
-    if (!name || name.trim().length === 0) {
-      return res.status(400).json({ error: "Collection name is required." });
-    }
+    const { name } = req.body;
 
     const collection = await prisma.wardrobeCollection.create({
       data: {

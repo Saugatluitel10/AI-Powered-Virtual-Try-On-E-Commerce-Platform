@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { verifyJwt, requireRole, type AuthRequest } from "../middleware/auth";
+import { validate } from "../middleware/validate";
+import { createProductSchema, bulkProductSchema, updateOrderStatusSchema, replyReviewSchema, updateInventorySchema, sizeChartSchema, createBannerSchema } from "../schemas";
 import { prisma } from "../lib/prisma";
 import { enqueueEmail } from "../jobs/queues";
 import { createNotification } from "../lib/notifications";
@@ -122,25 +124,9 @@ router.get("/products", async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/v1/brand/products ─────────────────────────────────────────────
-router.post("/products", async (req: AuthRequest, res) => {
+router.post("/products", validate(createProductSchema), async (req: AuthRequest, res) => {
   try {
-    const { name, description, price, currency, sizes, category, garmentType, gender, images, isTryonEnabled, suitableBodyTypes } = req.body as {
-      name: string;
-      description?: string;
-      price: number;
-      currency?: string;
-      sizes: string[];
-      category: string;
-      garmentType?: string;
-      gender?: string;
-      images: string[];
-      isTryonEnabled?: boolean;
-      suitableBodyTypes?: string[];
-    };
-
-    if (!name || !price || !sizes?.length || !category) {
-      return res.status(400).json({ error: "name, price, sizes, and category are required." });
-    }
+    const { name, description, price, currency, sizes, category, garmentType, gender, images, isTryonEnabled, suitableBodyTypes } = req.body;
 
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + "-" + Date.now().toString(36);
 
@@ -171,29 +157,12 @@ router.post("/products", async (req: AuthRequest, res) => {
 
 // ─── POST /api/v1/brand/products/bulk ────────────────────────────────────────
 // Accepts an array of product objects for CSV-parsed bulk upload
-router.post("/products/bulk", async (req: AuthRequest, res) => {
+router.post("/products/bulk", validate(bulkProductSchema), async (req: AuthRequest, res) => {
   try {
-    const { products } = req.body as {
-      products: Array<{
-        name: string;
-        description?: string;
-        price: number;
-        currency?: string;
-        sizes: string[];
-        category: string;
-        garmentType?: string;
-        gender?: string;
-        images?: string[];
-        isTryonEnabled?: boolean;
-      }>;
-    };
-
-    if (!products?.length) {
-      return res.status(400).json({ error: "products array is required." });
-    }
+    const { products } = req.body;
 
     const created = await prisma.product.createMany({
-      data: products.map((p, idx) => ({
+      data: products.map((p: typeof products[number], idx: number) => ({
         name: p.name,
         slug: p.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + "-" + Date.now().toString(36) + idx,
         description: p.description ?? null,
@@ -370,12 +339,9 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   shipped: ["delivered"],
 };
 
-router.patch("/orders/:id/status", async (req: AuthRequest, res) => {
+router.patch("/orders/:id/status", validate(updateOrderStatusSchema), async (req: AuthRequest, res) => {
   try {
-    const { status } = req.body as { status?: string };
-    if (!status) {
-      return res.status(400).json({ error: "status is required." });
-    }
+    const { status } = req.body;
 
     const orderItem = await prisma.orderItem.findFirst({
       where: {
@@ -486,12 +452,9 @@ router.get("/reviews", async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/v1/brand/reviews/:id/reply ───────────────────────────────────
-router.post("/reviews/:id/reply", async (req: AuthRequest, res) => {
+router.post("/reviews/:id/reply", validate(replyReviewSchema), async (req: AuthRequest, res) => {
   try {
-    const { reply } = req.body as { reply?: string };
-    if (!reply?.trim()) {
-      return res.status(400).json({ error: "Reply text is required." });
-    }
+    const { reply } = req.body;
 
     const review = await prisma.review.findFirst({
       where: { id: req.params.id as string, product: { brandId: req.brandId! } },
@@ -555,15 +518,9 @@ router.get("/inventory", async (req: AuthRequest, res) => {
 });
 
 // ─── PATCH /api/v1/brand/inventory/:productId ───────────────────────────────
-router.patch("/inventory/:productId", async (req: AuthRequest, res) => {
+router.patch("/inventory/:productId", validate(updateInventorySchema), async (req: AuthRequest, res) => {
   try {
-    const { sizes } = req.body as {
-      sizes: Array<{ size: string; stock: number }>;
-    };
-
-    if (!sizes?.length) {
-      return res.status(400).json({ error: "sizes array is required." });
-    }
+    const { sizes } = req.body;
 
     const product = await prisma.product.findFirst({
       where: { id: req.params.productId as string, brandId: req.brandId! },
@@ -589,21 +546,9 @@ router.patch("/inventory/:productId", async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/v1/brand/size-chart ──────────────────────────────────────────
-router.post("/size-chart", async (req: AuthRequest, res) => {
+router.post("/size-chart", validate(sizeChartSchema), async (req: AuthRequest, res) => {
   try {
-    const { sizes } = req.body as {
-      sizes: Array<{
-        size: string;
-        bustMin?: number; bustMax?: number;
-        waistMin?: number; waistMax?: number;
-        hipsMin?: number; hipsMax?: number;
-        sortOrder?: number;
-      }>;
-    };
-
-    if (!sizes?.length) {
-      return res.status(400).json({ error: "sizes array is required." });
-    }
+    const { sizes } = req.body;
 
     for (const s of sizes) {
       await prisma.sizeChart.upsert({
@@ -667,20 +612,9 @@ router.get("/payouts", async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/v1/brand/banners ────────────────────────────────────────────
-router.post("/banners", async (req: AuthRequest, res) => {
+router.post("/banners", validate(createBannerSchema), async (req: AuthRequest, res) => {
   try {
-    const { title, imageUrl, linkUrl, placement, startDate, endDate } = req.body as {
-      title: string;
-      imageUrl: string;
-      linkUrl?: string;
-      placement?: string;
-      startDate?: string;
-      endDate?: string;
-    };
-
-    if (!title || !imageUrl) {
-      return res.status(400).json({ error: "title and imageUrl are required." });
-    }
+    const { title, imageUrl, linkUrl, placement, startDate, endDate } = req.body;
 
     const banner = await prisma.promoBanner.create({
       data: {

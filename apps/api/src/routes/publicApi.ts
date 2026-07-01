@@ -2,6 +2,8 @@ import { Router } from "express";
 import { verifyApiKey, requireScope, type ApiKeyRequest } from "../middleware/apiKeyAuth";
 import { tenantRateLimit } from "../middleware/tenantRateLimiter";
 import { logApiUsage } from "../middleware/usageLogger";
+import { validate } from "../middleware/validate";
+import { publicTryOnSchema, sizeRecommendationSchema } from "../schemas";
 import { prisma } from "../lib/prisma";
 
 const router: ReturnType<typeof Router> = Router();
@@ -74,16 +76,9 @@ router.get("/products/:id", requireScope("products:read"), async (req: ApiKeyReq
 });
 
 // ─── POST /api/v1/public/tryon — submit a try-on job ────────────────────────
-router.post("/tryon", requireScope("tryon:write"), async (req: ApiKeyRequest, res) => {
+router.post("/tryon", requireScope("tryon:write"), validate(publicTryOnSchema), async (req: ApiKeyRequest, res) => {
   try {
-    const { productId, userPhotoUrl } = req.body as {
-      productId?: string;
-      userPhotoUrl?: string;
-    };
-
-    if (!productId || !userPhotoUrl) {
-      return res.status(400).json({ error: "productId and userPhotoUrl are required." });
-    }
+    const { productId, userPhotoUrl } = req.body;
 
     const product = await prisma.product.findUnique({
       where: { id: productId, isActive: true, isTryonEnabled: true },
@@ -139,17 +134,9 @@ router.get("/tryon/:jobId", requireScope("tryon:read"), async (req: ApiKeyReques
 });
 
 // ─── POST /api/v1/public/size-recommendation ────────────────────────────────
-router.post("/size-recommendation", requireScope("products:read"), async (req: ApiKeyRequest, res) => {
+router.post("/size-recommendation", requireScope("products:read"), validate(sizeRecommendationSchema), async (req: ApiKeyRequest, res) => {
   try {
-    const { productId, bust, waist, hips } = req.body as {
-      productId?: string;
-      bust?: number;
-      waist?: number;
-      hips?: number;
-    };
-
-    if (!productId) return res.status(400).json({ error: "productId is required." });
-    if (!bust && !waist && !hips) return res.status(400).json({ error: "At least one measurement is required." });
+    const { productId, bust, waist, hips } = req.body;
 
     const { recommendSize } = await import("../lib/sizeRecommender");
 

@@ -3,6 +3,8 @@ import { verifyJwt, type AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import { enqueueEmail } from "../jobs/queues";
 import { createNotification } from "../lib/notifications";
+import { validate } from "../middleware/validate";
+import { createOrderSchema, returnOrderSchema, refundOrderSchema } from "../schemas";
 
 type TransactionClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
@@ -314,25 +316,9 @@ router.get("/:id/invoice", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/v1/orders ─────────────────────────────────────────────────────
-router.post("/", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/", verifyJwt, validate(createOrderSchema), async (req: AuthRequest, res) => {
   try {
-    const { shippingAddress, paymentMethod, discountCode } = req.body as {
-      shippingAddress?: Record<string, string>;
-      paymentMethod?: string;
-      discountCode?: string;
-    };
-
-    if (!shippingAddress) {
-      return res.status(400).json({ error: "shippingAddress is required." });
-    }
-    if (!paymentMethod) {
-      return res.status(400).json({ error: "paymentMethod is required." });
-    }
-
-    const VALID_PAYMENT_METHODS = ["esewa", "khalti", "stripe", "cod"];
-    if (!VALID_PAYMENT_METHODS.includes(paymentMethod)) {
-      return res.status(400).json({ error: `paymentMethod must be one of: ${VALID_PAYMENT_METHODS.join(", ")}` });
-    }
+    const { shippingAddress, paymentMethod, discountCode } = req.body;
 
     const cartItems = await prisma.cartItem.findMany({
       where: { userId: req.userId! },
@@ -499,19 +485,9 @@ router.patch("/:id/cancel", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/v1/orders/:id/return ──────────────────────────────────────────
-router.post("/:id/return", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/:id/return", verifyJwt, validate(returnOrderSchema), async (req: AuthRequest, res) => {
   try {
-    const { items, reason } = req.body as {
-      items: Array<{ orderItemId: string; quantity: number }>;
-      reason: string;
-    };
-
-    if (!items?.length) {
-      return res.status(400).json({ error: "Select at least one item to return." });
-    }
-    if (!reason?.trim()) {
-      return res.status(400).json({ error: "Reason is required." });
-    }
+    const { items, reason } = req.body;
 
     const order = await prisma.order.findFirst({
       where: { id: req.params.id as string, userId: req.userId! },
@@ -568,13 +544,9 @@ router.post("/:id/return", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/v1/orders/:id/refund ─────────────────────────────────────────
-router.post("/:id/refund", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/:id/refund", verifyJwt, validate(refundOrderSchema), async (req: AuthRequest, res) => {
   try {
-    const { reason } = req.body as { reason?: string };
-
-    if (!reason?.trim()) {
-      return res.status(400).json({ error: "Refund reason is required." });
-    }
+    const { reason } = req.body;
 
     const order = await prisma.order.findFirst({
       where: { id: req.params.id as string, userId: req.userId! },

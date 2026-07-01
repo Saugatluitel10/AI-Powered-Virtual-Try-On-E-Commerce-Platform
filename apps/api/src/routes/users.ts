@@ -1,6 +1,18 @@
 import { Router } from "express";
 import multer from "multer";
 import { verifyJwt, type AuthRequest } from "../middleware/auth";
+import { validate } from "../middleware/validate";
+import {
+  updateProfileSchema,
+  updateBodyProfileSchema,
+  updateStyleProfileSchema,
+  notificationPrefsSchema,
+  deleteAccountSchema,
+  createAddressSchema,
+  updateAddressSchema,
+  priceAlertSchema,
+  followBrandSchema,
+} from "../schemas";
 import { supabase, uploadUserPhoto, getSignedUrl, BUCKETS } from "../lib/supabase";
 import { prisma } from "../lib/prisma";
 import { enqueueBodyAnalysis } from "../jobs/queues";
@@ -43,12 +55,9 @@ router.get("/me", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // PATCH /api/v1/users/me
-router.patch("/me", verifyJwt, async (req: AuthRequest, res) => {
+router.patch("/me", verifyJwt, validate(updateProfileSchema), async (req: AuthRequest, res) => {
   try {
-    const { name, avatarUrl } = req.body as {
-      name?: string;
-      avatarUrl?: string;
-    };
+    const { name, avatarUrl } = req.body;
 
     const user = await prisma.user.update({
       where: { id: req.userId! },
@@ -158,17 +167,9 @@ router.get("/me/body-profile", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // PUT /api/v1/users/me/body-profile
-router.put("/me/body-profile", verifyJwt, async (req: AuthRequest, res) => {
+router.put("/me/body-profile", verifyJwt, validate(updateBodyProfileSchema), async (req: AuthRequest, res) => {
   try {
-    const { height, weight, bust, waist, hips, shoulders, bodyType } = req.body as {
-      height?: number;
-      weight?: number;
-      bust?: number;
-      waist?: number;
-      hips?: number;
-      shoulders?: number;
-      bodyType?: string;
-    };
+    const { height, weight, bust, waist, hips, shoulders, bodyType } = req.body;
 
     const profile = await prisma.bodyProfile.upsert({
       where: { userId: req.userId! },
@@ -246,13 +247,9 @@ router.get("/me/style-profile", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // PUT /api/v1/users/me/style-profile
-router.put("/me/style-profile", verifyJwt, async (req: AuthRequest, res) => {
+router.put("/me/style-profile", verifyJwt, validate(updateStyleProfileSchema), async (req: AuthRequest, res) => {
   try {
-    const { preferredStyles, occasions, colorPalette } = req.body as {
-      preferredStyles?: string[];
-      occasions?: string[];
-      colorPalette?: string[];
-    };
+    const { preferredStyles, occasions, colorPalette } = req.body;
 
     const profile = await prisma.styleProfile.upsert({
       where: { userId: req.userId! },
@@ -288,14 +285,9 @@ router.put("/me/style-profile", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // ─── PATCH /api/v1/users/me/notifications — notification preferences ────────
-router.patch("/me/notifications", verifyJwt, async (req: AuthRequest, res) => {
+router.patch("/me/notifications", verifyJwt, validate(notificationPrefsSchema), async (req: AuthRequest, res) => {
   try {
-    const { emailMarketing, emailOrders, emailTryOn, pushEnabled } = req.body as {
-      emailMarketing?: boolean;
-      emailOrders?: boolean;
-      emailTryOn?: boolean;
-      pushEnabled?: boolean;
-    };
+    const { emailMarketing, emailOrders, emailTryOn, pushEnabled } = req.body;
 
     const user = await prisma.user.update({
       where: { id: req.userId! },
@@ -398,16 +390,8 @@ router.get("/me/export", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // ─── DELETE /api/v1/users/me — GDPR account deletion ────────────────────────
-router.delete("/me", verifyJwt, async (req: AuthRequest, res) => {
+router.delete("/me", verifyJwt, validate(deleteAccountSchema), async (req: AuthRequest, res) => {
   try {
-    const { confirmation } = req.body as { confirmation?: string };
-
-    if (confirmation !== "DELETE_MY_ACCOUNT") {
-      return res.status(400).json({
-        error: "Send { confirmation: \"DELETE_MY_ACCOUNT\" } to confirm.",
-      });
-    }
-
     const user = await prisma.user.findUnique({
       where: { id: req.userId! },
       select: { supabaseId: true },
@@ -502,22 +486,9 @@ router.get("/me/addresses", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/v1/users/me/addresses ────────────────────────────────────────
-router.post("/me/addresses", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/me/addresses", verifyJwt, validate(createAddressSchema), async (req: AuthRequest, res) => {
   try {
-    const { label, fullName, phone, street, city, district, province, isDefault } = req.body as {
-      label?: string;
-      fullName?: string;
-      phone?: string;
-      street?: string;
-      city?: string;
-      district?: string;
-      province?: string;
-      isDefault?: boolean;
-    };
-
-    if (!fullName?.trim() || !phone?.trim() || !street?.trim() || !city?.trim() || !district?.trim()) {
-      return res.status(400).json({ error: "fullName, phone, street, city, and district are required." });
-    }
+    const { label, fullName, phone, street, city, district, province, isDefault } = req.body;
 
     if (isDefault) {
       await prisma.address.updateMany({
@@ -529,14 +500,14 @@ router.post("/me/addresses", verifyJwt, async (req: AuthRequest, res) => {
     const address = await prisma.address.create({
       data: {
         userId: req.userId!,
-        label: label?.trim() ?? "Home",
-        fullName: fullName.trim(),
-        phone: phone.trim(),
-        street: street.trim(),
-        city: city.trim(),
-        district: district.trim(),
-        province: province?.trim() ?? null,
-        isDefault: isDefault ?? false,
+        label,
+        fullName,
+        phone,
+        street,
+        city,
+        district,
+        province: province ?? null,
+        isDefault,
       },
     });
 
@@ -548,7 +519,7 @@ router.post("/me/addresses", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // ─── PATCH /api/v1/users/me/addresses/:id ───────────────────────────────────
-router.patch("/me/addresses/:id", verifyJwt, async (req: AuthRequest, res) => {
+router.patch("/me/addresses/:id", verifyJwt, validate(updateAddressSchema), async (req: AuthRequest, res) => {
   try {
     const existing = await prisma.address.findFirst({
       where: { id: req.params.id as string, userId: req.userId! },
@@ -557,16 +528,7 @@ router.patch("/me/addresses/:id", verifyJwt, async (req: AuthRequest, res) => {
       return res.status(404).json({ error: "Address not found." });
     }
 
-    const { label, fullName, phone, street, city, district, province, isDefault } = req.body as {
-      label?: string;
-      fullName?: string;
-      phone?: string;
-      street?: string;
-      city?: string;
-      district?: string;
-      province?: string;
-      isDefault?: boolean;
-    };
+    const { label, fullName, phone, street, city, district, province, isDefault } = req.body;
 
     if (isDefault) {
       await prisma.address.updateMany({
@@ -578,13 +540,13 @@ router.patch("/me/addresses/:id", verifyJwt, async (req: AuthRequest, res) => {
     const address = await prisma.address.update({
       where: { id: existing.id },
       data: {
-        ...(label !== undefined && { label: label.trim() }),
-        ...(fullName !== undefined && { fullName: fullName.trim() }),
-        ...(phone !== undefined && { phone: phone.trim() }),
-        ...(street !== undefined && { street: street.trim() }),
-        ...(city !== undefined && { city: city.trim() }),
-        ...(district !== undefined && { district: district.trim() }),
-        ...(province !== undefined && { province: province?.trim() ?? null }),
+        ...(label !== undefined && { label }),
+        ...(fullName !== undefined && { fullName }),
+        ...(phone !== undefined && { phone }),
+        ...(street !== undefined && { street }),
+        ...(city !== undefined && { city }),
+        ...(district !== undefined && { district }),
+        ...(province !== undefined && { province: province ?? null }),
         ...(isDefault !== undefined && { isDefault }),
       },
     });
@@ -652,16 +614,9 @@ router.get("/me/price-alerts", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/v1/users/me/price-alerts ─────────────────────────────────────
-router.post("/me/price-alerts", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/me/price-alerts", verifyJwt, validate(priceAlertSchema), async (req: AuthRequest, res) => {
   try {
-    const { productId, targetPrice } = req.body as {
-      productId?: string;
-      targetPrice?: number;
-    };
-
-    if (!productId || !targetPrice || targetPrice <= 0) {
-      return res.status(400).json({ error: "productId and a positive targetPrice are required." });
-    }
+    const { productId, targetPrice } = req.body;
 
     const product = await prisma.product.findUnique({
       where: { id: productId },
@@ -733,12 +688,9 @@ router.get("/me/followed-brands", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/v1/users/me/followed-brands ──────────────────────────────────
-router.post("/me/followed-brands", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/me/followed-brands", verifyJwt, validate(followBrandSchema), async (req: AuthRequest, res) => {
   try {
-    const { brandId } = req.body as { brandId?: string };
-    if (!brandId) {
-      return res.status(400).json({ error: "brandId is required." });
-    }
+    const { brandId } = req.body;
 
     const brand = await prisma.brand.findUnique({
       where: { id: brandId },

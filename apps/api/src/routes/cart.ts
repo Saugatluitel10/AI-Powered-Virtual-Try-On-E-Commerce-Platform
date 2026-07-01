@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { verifyJwt, type AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
+import { validate } from "../middleware/validate";
+import { addToCartSchema, updateCartSchema, syncCartSchema } from "../schemas";
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -55,17 +57,9 @@ router.get("/", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/v1/cart ───────────────────────────────────────────────────────
-router.post("/", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/", verifyJwt, validate(addToCartSchema), async (req: AuthRequest, res) => {
   try {
-    const { productId, size, quantity = 1 } = req.body as {
-      productId?: string;
-      size?: string;
-      quantity?: number;
-    };
-
-    if (!productId || !size) {
-      return res.status(400).json({ error: "productId and size are required." });
-    }
+    const { productId, size, quantity } = req.body;
 
     const product = await prisma.product.findUnique({
       where: { id: productId, isActive: true },
@@ -116,12 +110,9 @@ router.post("/", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // ─── PATCH /api/v1/cart/:id ──────────────────────────────────────────────────
-router.patch("/:id", verifyJwt, async (req: AuthRequest, res) => {
+router.patch("/:id", verifyJwt, validate(updateCartSchema), async (req: AuthRequest, res) => {
   try {
-    const { quantity } = req.body as { quantity?: number };
-    if (quantity === undefined || quantity < 1) {
-      return res.status(400).json({ error: "quantity must be >= 1." });
-    }
+    const { quantity } = req.body;
 
     const item = await prisma.cartItem.findFirst({
       where: { id: req.params.id as string, userId: req.userId! },
@@ -173,19 +164,16 @@ router.delete("/", verifyJwt, async (req: AuthRequest, res) => {
 
 // ─── POST /api/v1/cart/sync ──────────────────────────────────────────────────
 // Merge local (localStorage) cart items into the DB on login
-router.post("/sync", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/sync", verifyJwt, validate(syncCartSchema), async (req: AuthRequest, res) => {
   try {
-    const { items } = req.body as {
-      items?: Array<{ productId: string; size: string; quantity: number }>;
-    };
+    const { items } = req.body;
 
-    if (!items || items.length === 0) {
+    if (items.length === 0) {
       return res.json({ data: { synced: 0 } });
     }
 
     let synced = 0;
     for (const { productId, size, quantity } of items) {
-      if (!productId || !size || quantity < 1) continue;
 
       const product = await prisma.product.findUnique({
         where: { id: productId, isActive: true },
