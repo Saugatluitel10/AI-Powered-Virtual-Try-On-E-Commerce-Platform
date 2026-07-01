@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { verifyJwt, type AuthRequest } from "../middleware/auth";
+import { validate } from "../middleware/validate";
+import { createTryOnSchema, tryOnFeedbackSchema } from "../schemas";
 import { prisma } from "../lib/prisma";
 import { getSignedUrl, BUCKETS } from "../lib/supabase";
 import { enqueueTryOn } from "../jobs/queues";
@@ -11,12 +13,9 @@ const router: ReturnType<typeof Router> = Router();
 // Submit a new try-on job.
 // Body: { productId: string }
 // The user must already have a body photo uploaded (BodyProfile.photoUrl).
-router.post("/", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/", verifyJwt, validate(createTryOnSchema), async (req: AuthRequest, res) => {
   try {
-    const { productId } = req.body as { productId?: string };
-    if (!productId) {
-      return res.status(400).json({ error: "productId is required." });
-    }
+    const { productId } = req.body;
 
     // Fetch user's photo
     const bodyProfile = await prisma.bodyProfile.findUnique({
@@ -284,12 +283,9 @@ router.get("/:id", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/v1/try-on/:id/feedback ──────────────────────────────────────
-router.post("/:id/feedback", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/:id/feedback", verifyJwt, validate(tryOnFeedbackSchema), async (req: AuthRequest, res) => {
   try {
-    const { rating } = req.body as { rating?: number };
-    if (rating !== 1 && rating !== -1) {
-      return res.status(400).json({ error: "rating must be 1 (thumbs up) or -1 (thumbs down)." });
-    }
+    const { rating } = req.body;
 
     const result = await prisma.tryOnResult.findFirst({
       where: { id: req.params.id as string, userId: req.userId! },

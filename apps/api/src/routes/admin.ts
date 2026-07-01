@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { verifyJwt, requireRole, type AuthRequest } from "../middleware/auth";
+import { validate } from "../middleware/validate";
+import { adminUpdateOrderSchema, adminVerifyBrandSchema, adminUpdateReturnSchema, adminUpdateBannerSchema, adminCreatePayoutSchema } from "../schemas";
 import { prisma } from "../lib/prisma";
 import { enqueueEmail } from "../jobs/queues";
 import { createNotification, createNotificationsForBrandMembers } from "../lib/notifications";
@@ -94,12 +96,9 @@ router.get("/dashboard", async (_req: AuthRequest, res) => {
 });
 
 // ─── PATCH /api/v1/admin/orders/:id/status ───────────────────────────────────
-router.patch("/orders/:id/status", async (req: AuthRequest, res) => {
+router.patch("/orders/:id/status", validate(adminUpdateOrderSchema), async (req: AuthRequest, res) => {
   try {
-    const { status, trackingNumber } = req.body as {
-      status?: string;
-      trackingNumber?: string;
-    };
+    const { status, trackingNumber } = req.body;
 
     const ALLOWED_TRANSITIONS: Record<string, string[]> = {
       pending: ["confirmed", "cancelled"],
@@ -111,10 +110,6 @@ router.patch("/orders/:id/status", async (req: AuthRequest, res) => {
       refund_requested: ["refunded"],
       refunded: [],
     };
-
-    if (!status) {
-      return res.status(400).json({ error: "status is required." });
-    }
 
     const order = await prisma.order.findUnique({
       where: { id: req.params.id as string },
@@ -240,9 +235,9 @@ router.get("/orders", async (req: AuthRequest, res) => {
 });
 
 // ─── PATCH /api/v1/admin/brands/:id/verify ──────────────────────────────────
-router.patch("/brands/:id/verify", async (req: AuthRequest, res) => {
+router.patch("/brands/:id/verify", validate(adminVerifyBrandSchema), async (req: AuthRequest, res) => {
   try {
-    const { isVerified } = req.body as { isVerified?: boolean };
+    const { isVerified } = req.body;
 
     const brand = await prisma.brand.findUnique({
       where: { id: req.params.id as string },
@@ -288,13 +283,9 @@ router.patch("/brands/:id/verify", async (req: AuthRequest, res) => {
 });
 
 // ─── PATCH /api/v1/admin/returns/:id ────────────────────────────────────────
-router.patch("/returns/:id", async (req: AuthRequest, res) => {
+router.patch("/returns/:id", validate(adminUpdateReturnSchema), async (req: AuthRequest, res) => {
   try {
-    const { status } = req.body as { status?: string };
-
-    if (!status || !["approved", "rejected"].includes(status)) {
-      return res.status(400).json({ error: "status must be 'approved' or 'rejected'." });
-    }
+    const { status } = req.body;
 
     const returnRequest = await prisma.returnRequest.findUnique({
       where: { id: req.params.id as string },
@@ -364,13 +355,9 @@ router.get("/banners", async (req: AuthRequest, res) => {
 });
 
 // ─── PATCH /api/v1/admin/banners/:id ────────────────────────────────────────
-router.patch("/banners/:id", async (req: AuthRequest, res) => {
+router.patch("/banners/:id", validate(adminUpdateBannerSchema), async (req: AuthRequest, res) => {
   try {
-    const { status, adminNotes } = req.body as { status?: string; adminNotes?: string };
-
-    if (status && !["approved", "rejected", "active", "expired"].includes(status)) {
-      return res.status(400).json({ error: "Invalid status. Use: approved, rejected, active, expired." });
-    }
+    const { status, adminNotes } = req.body;
 
     const banner = await prisma.promoBanner.findUnique({
       where: { id: req.params.id as string },
@@ -409,20 +396,9 @@ router.patch("/banners/:id", async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/v1/admin/payouts ─────────────────────────────────────────────
-router.post("/payouts", async (req: AuthRequest, res) => {
+router.post("/payouts", validate(adminCreatePayoutSchema), async (req: AuthRequest, res) => {
   try {
-    const { brandId, amount, currency, periodStart, periodEnd, reference } = req.body as {
-      brandId: string;
-      amount: number;
-      currency?: string;
-      periodStart: string;
-      periodEnd: string;
-      reference?: string;
-    };
-
-    if (!brandId || !amount || !periodStart || !periodEnd) {
-      return res.status(400).json({ error: "brandId, amount, periodStart, and periodEnd are required." });
-    }
+    const { brandId, amount, currency, periodStart, periodEnd, reference } = req.body;
 
     const brand = await prisma.brand.findUnique({ where: { id: brandId } });
     if (!brand) {

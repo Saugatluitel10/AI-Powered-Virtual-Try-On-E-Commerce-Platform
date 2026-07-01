@@ -1,23 +1,15 @@
 import { Router } from "express";
 import { verifyJwt, type AuthRequest } from "../middleware/auth";
+import { validate } from "../middleware/validate";
+import { feedbackSchema } from "../schemas";
 import { prisma } from "../lib/prisma";
 
 const router: ReturnType<typeof Router> = Router();
 
 // ─── POST /api/v1/feedback — submit beta feedback / NPS ─────────────────────
-router.post("/", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/", verifyJwt, validate(feedbackSchema), async (req: AuthRequest, res) => {
   try {
-    const { type, score, comment, metadata } = req.body as {
-      type?: "nps" | "bug" | "feature" | "general";
-      score?: number;
-      comment?: string;
-      metadata?: Record<string, unknown>;
-    };
-
-    if (!type) return res.status(400).json({ error: "type is required (nps, bug, feature, general)." });
-    if (type === "nps" && (score === undefined || score < 0 || score > 10)) {
-      return res.status(400).json({ error: "NPS score must be 0–10." });
-    }
+    const { type, score, comment, metadata } = req.body;
 
     const user = await prisma.user.findUnique({
       where: { id: req.userId },

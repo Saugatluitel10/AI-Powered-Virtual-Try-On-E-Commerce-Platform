@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { verifyJwt, type AuthRequest } from "../middleware/auth";
+import { validate } from "../middleware/validate";
+import { addWishlistSchema } from "../schemas";
 import { prisma } from "../lib/prisma";
 
 const router: ReturnType<typeof Router> = Router();
@@ -45,13 +47,9 @@ router.get("/", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/v1/wishlist ─────────────────────────────────────────────────
-router.post("/", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/", verifyJwt, validate(addWishlistSchema), async (req: AuthRequest, res) => {
   try {
-    const { productId } = req.body as { productId?: string };
-
-    if (!productId) {
-      return res.status(400).json({ error: "productId is required." });
-    }
+    const { productId } = req.body;
 
     const product = await prisma.product.findUnique({ where: { id: productId } });
     if (!product) {

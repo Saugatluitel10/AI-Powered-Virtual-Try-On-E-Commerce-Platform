@@ -1,6 +1,14 @@
 import { Router, type Request } from "express";
 import crypto from "crypto";
 import { verifyJwt, type AuthRequest } from "../middleware/auth";
+import { validate } from "../middleware/validate";
+import {
+  paymentOrderIdSchema,
+  esewaVerifySchema,
+  khaltiVerifySchema,
+  stripeConfirmSchema,
+  discountValidateSchema,
+} from "../schemas";
 import { prisma } from "../lib/prisma";
 import { enqueueEmail } from "../jobs/queues";
 
@@ -29,12 +37,9 @@ function generateEsewaSignature(message: string): string {
 }
 
 // ─── POST /api/v1/payments/esewa/initiate ────────────────────────────────────
-router.post("/esewa/initiate", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/esewa/initiate", verifyJwt, validate(paymentOrderIdSchema), async (req: AuthRequest, res) => {
   try {
-    const { orderId } = req.body as { orderId?: string };
-    if (!orderId) {
-      return res.status(400).json({ error: "orderId is required." });
-    }
+    const { orderId } = req.body;
 
     const order = await prisma.order.findFirst({
       where: { id: orderId, userId: req.userId!, status: "pending" },
@@ -78,16 +83,9 @@ router.post("/esewa/initiate", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/v1/payments/esewa/verify ──────────────────────────────────────
-router.post("/esewa/verify", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/esewa/verify", verifyJwt, validate(esewaVerifySchema), async (req: AuthRequest, res) => {
   try {
-    const { orderId, encodedResponse } = req.body as {
-      orderId?: string;
-      encodedResponse?: string;
-    };
-
-    if (!orderId || !encodedResponse) {
-      return res.status(400).json({ error: "orderId and encodedResponse are required." });
-    }
+    const { orderId, encodedResponse } = req.body;
 
     // Decode the base64 response from eSewa
     const decoded = JSON.parse(
@@ -173,12 +171,9 @@ router.post("/esewa/verify", verifyJwt, async (req: AuthRequest, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ─── POST /api/v1/payments/khalti/initiate ───────────────────────────────────
-router.post("/khalti/initiate", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/khalti/initiate", verifyJwt, validate(paymentOrderIdSchema), async (req: AuthRequest, res) => {
   try {
-    const { orderId } = req.body as { orderId?: string };
-    if (!orderId) {
-      return res.status(400).json({ error: "orderId is required." });
-    }
+    const { orderId } = req.body;
 
     const order = await prisma.order.findFirst({
       where: { id: orderId, userId: req.userId!, status: "pending" },
@@ -235,16 +230,9 @@ router.post("/khalti/initiate", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/v1/payments/khalti/verify ─────────────────────────────────────
-router.post("/khalti/verify", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/khalti/verify", verifyJwt, validate(khaltiVerifySchema), async (req: AuthRequest, res) => {
   try {
-    const { orderId, pidx } = req.body as {
-      orderId?: string;
-      pidx?: string;
-    };
-
-    if (!orderId || !pidx) {
-      return res.status(400).json({ error: "orderId and pidx are required." });
-    }
+    const { orderId, pidx } = req.body;
 
     // Verify with Khalti
     const khaltiRes = await fetch(KHALTI_VERIFY_URL, {
@@ -335,16 +323,13 @@ router.post("/khalti/verify", verifyJwt, async (req: AuthRequest, res) => {
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY ?? "";
 
 // ─── POST /api/v1/payments/stripe/create-intent ─────────────────────────────
-router.post("/stripe/create-intent", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/stripe/create-intent", verifyJwt, validate(paymentOrderIdSchema), async (req: AuthRequest, res) => {
   try {
     if (!STRIPE_SECRET_KEY) {
       return res.status(500).json({ error: "Stripe is not configured." });
     }
 
-    const { orderId } = req.body as { orderId?: string };
-    if (!orderId) {
-      return res.status(400).json({ error: "orderId is required." });
-    }
+    const { orderId } = req.body;
 
     const order = await prisma.order.findFirst({
       where: { id: orderId, userId: req.userId!, status: "pending" },
@@ -377,16 +362,9 @@ router.post("/stripe/create-intent", verifyJwt, async (req: AuthRequest, res) =>
 });
 
 // ─── POST /api/v1/payments/stripe/confirm ───────────────────────────────────
-router.post("/stripe/confirm", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/stripe/confirm", verifyJwt, validate(stripeConfirmSchema), async (req: AuthRequest, res) => {
   try {
-    const { orderId, paymentIntentId } = req.body as {
-      orderId?: string;
-      paymentIntentId?: string;
-    };
-
-    if (!orderId || !paymentIntentId) {
-      return res.status(400).json({ error: "orderId and paymentIntentId are required." });
-    }
+    const { orderId, paymentIntentId } = req.body;
 
     if (!STRIPE_SECRET_KEY) {
       return res.status(500).json({ error: "Stripe is not configured." });
@@ -460,13 +438,9 @@ router.post("/stripe/confirm", verifyJwt, async (req: AuthRequest, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ─── POST /api/v1/payments/discount/validate ────────────────────────────────
-router.post("/discount/validate", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/discount/validate", verifyJwt, validate(discountValidateSchema), async (req: AuthRequest, res) => {
   try {
-    const { code, subtotal } = req.body as { code?: string; subtotal?: number };
-
-    if (!code?.trim()) {
-      return res.status(400).json({ error: "Discount code is required." });
-    }
+    const { code, subtotal } = req.body;
 
     const discount = await prisma.discountCode.findUnique({
       where: { code: code.trim().toUpperCase() },

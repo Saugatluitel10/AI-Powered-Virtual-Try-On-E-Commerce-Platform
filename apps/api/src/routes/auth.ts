@@ -2,21 +2,25 @@ import { Router } from "express";
 import { supabase } from "../lib/supabase";
 import { prisma } from "../lib/prisma";
 import { verifyJwt, type AuthRequest } from "../middleware/auth";
+import { validate } from "../middleware/validate";
+import {
+  signupSchema,
+  loginSchema,
+  refreshSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  verifyEmailSchema,
+  socialAuthSchema,
+  syncUserSchema,
+  registerBrandSchema,
+} from "../schemas";
 
 const router: ReturnType<typeof Router> = Router();
 
 // ─── POST /api/v1/auth/signup ────────────────────────────────────────────────
-router.post("/signup", async (req, res) => {
+router.post("/signup", validate(signupSchema), async (req, res) => {
   try {
-    const { email, password, name } = req.body as {
-      email?: string;
-      password?: string;
-      name?: string;
-    };
-
-    if (!email || !password) {
-      return res.status(400).json({ error: "email and password are required." });
-    }
+    const { email, password, name } = req.body;
 
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -62,16 +66,9 @@ router.post("/signup", async (req, res) => {
 });
 
 // ─── POST /api/v1/auth/login ─────────────────────────────────────────────────
-router.post("/login", async (req, res) => {
+router.post("/login", validate(loginSchema), async (req, res) => {
   try {
-    const { email, password } = req.body as {
-      email?: string;
-      password?: string;
-    };
-
-    if (!email || !password) {
-      return res.status(400).json({ error: "email and password are required." });
-    }
+    const { email, password } = req.body;
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -104,13 +101,9 @@ router.post("/login", async (req, res) => {
 });
 
 // ─── POST /api/v1/auth/refresh ───────────────────────────────────────────────
-router.post("/refresh", async (req, res) => {
+router.post("/refresh", validate(refreshSchema), async (req, res) => {
   try {
-    const { refreshToken } = req.body as { refreshToken?: string };
-
-    if (!refreshToken) {
-      return res.status(400).json({ error: "refreshToken is required." });
-    }
+    const { refreshToken } = req.body;
 
     const { data, error } = await supabase.auth.refreshSession({
       refresh_token: refreshToken,
@@ -146,13 +139,9 @@ router.post("/logout", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/v1/auth/forgot-password ───────────────────────────────────────
-router.post("/forgot-password", async (req, res) => {
+router.post("/forgot-password", validate(forgotPasswordSchema), async (req, res) => {
   try {
-    const { email } = req.body as { email?: string };
-
-    if (!email) {
-      return res.status(400).json({ error: "email is required." });
-    }
+    const { email } = req.body;
 
     const redirectTo = `${process.env.FRONTEND_URL ?? "http://localhost:3000"}/reset-password`;
 
@@ -172,20 +161,9 @@ router.post("/forgot-password", async (req, res) => {
 });
 
 // ─── POST /api/v1/auth/reset-password ────────────────────────────────────────
-router.post("/reset-password", async (req, res) => {
+router.post("/reset-password", validate(resetPasswordSchema), async (req, res) => {
   try {
-    const { accessToken, newPassword } = req.body as {
-      accessToken?: string;
-      newPassword?: string;
-    };
-
-    if (!accessToken || !newPassword) {
-      return res.status(400).json({ error: "accessToken and newPassword are required." });
-    }
-
-    if (newPassword.length < 8) {
-      return res.status(400).json({ error: "Password must be at least 8 characters." });
-    }
+    const { accessToken, newPassword } = req.body;
 
     const { error } = await supabase.auth.admin.updateUserById(
       (await supabase.auth.getUser(accessToken)).data.user?.id ?? "",
@@ -204,13 +182,9 @@ router.post("/reset-password", async (req, res) => {
 });
 
 // ─── POST /api/v1/auth/verify-email ──────────────────────────────────────────
-router.post("/verify-email", async (req, res) => {
+router.post("/verify-email", validate(verifyEmailSchema), async (req, res) => {
   try {
-    const { token, type } = req.body as { token?: string; type?: string };
-
-    if (!token) {
-      return res.status(400).json({ error: "token is required." });
-    }
+    const { token, type } = req.body;
 
     const { data, error } = await supabase.auth.verifyOtp({
       token_hash: token,
@@ -239,13 +213,9 @@ router.post("/verify-email", async (req, res) => {
 });
 
 // ─── POST /api/v1/auth/social ────────────────────────────────────────────────
-router.post("/social", async (req, res) => {
+router.post("/social", validate(socialAuthSchema), async (req, res) => {
   try {
-    const { provider } = req.body as { provider?: string };
-
-    if (!provider || !["google", "facebook"].includes(provider)) {
-      return res.status(400).json({ error: "provider must be 'google' or 'facebook'." });
-    }
+    const { provider } = req.body;
 
     const redirectTo = `${process.env.FRONTEND_URL ?? "http://localhost:3000"}/auth/callback`;
 
@@ -294,14 +264,14 @@ router.post("/social/callback", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/v1/auth/sync-user ────────────────────────────────────────────
-router.post("/sync-user", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/sync-user", verifyJwt, validate(syncUserSchema), async (req: AuthRequest, res) => {
   try {
     const authHeader = req.headers.authorization!;
     const token = authHeader.slice(7);
     const { data } = await supabase.auth.getUser(token);
     const supabaseUser = data.user!;
 
-    const { name } = req.body as { name?: string };
+    const { name } = req.body;
 
     const user = await prisma.user.upsert({
       where: { supabaseId: supabaseUser.id },
@@ -321,13 +291,9 @@ router.post("/sync-user", verifyJwt, async (req: AuthRequest, res) => {
 });
 
 // ─── POST /api/v1/auth/register-brand ────────────────────────────────────────
-router.post("/register-brand", verifyJwt, async (req: AuthRequest, res) => {
+router.post("/register-brand", verifyJwt, validate(registerBrandSchema), async (req: AuthRequest, res) => {
   try {
-    const { brandName } = req.body as { brandName?: string };
-
-    if (!brandName?.trim()) {
-      return res.status(400).json({ error: "brandName is required." });
-    }
+    const { brandName } = req.body;
 
     const user = await prisma.user.findUnique({
       where: { id: req.userId! },
