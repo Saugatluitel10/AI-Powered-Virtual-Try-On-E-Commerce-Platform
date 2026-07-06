@@ -59,7 +59,7 @@ export default function ProductCard({ product, highlightBodyType, priority = fal
           </p>
           <div className="flex items-center gap-2 flex-wrap">
             {product.isTryonEnabled && (
-              <span className="bg-purple-100 text-purple-700 text-[10px] font-medium px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+              <span className="bg-brand-primary/10 text-brand-primary text-[10px] font-medium px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
                 <Camera className="w-2.5 h-2.5" /> Try On
               </span>
             )}
@@ -101,7 +101,7 @@ export default function ProductCard({ product, highlightBodyType, priority = fal
         )}
 
         {product.isTryonEnabled && (
-          <div className="absolute top-2 left-2 bg-purple-600 text-white text-xs font-medium px-2 py-1 rounded-full flex items-center gap-1">
+          <div className="absolute top-2 left-2 bg-brand-primary text-white text-xs font-medium px-2 py-1 rounded-full flex items-center gap-1">
             <Camera className="w-3 h-3" />
             Try On
           </div>

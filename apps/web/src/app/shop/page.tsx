@@ -6,6 +6,7 @@ import { SlidersHorizontal, Search, X, ShoppingBag, LayoutGrid, List, Megaphone 
 import api from "@/lib/api";
 import type { ProductListItem } from "@/types/product";
 import ProductCard from "@/components/catalog/ProductCard";
+import { DEMO_PRODUCTS, DEMO_BRANDS } from "@/data/demo-products";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -82,23 +83,61 @@ interface ProductPage {
   totalPages: number;
 }
 
-async function fetchProducts(filters: Filters, page: number): Promise<ProductPage> {
-  const params = new URLSearchParams();
-  params.set("page", String(page));
-  params.set("pageSize", String(PAGE_SIZE));
-  params.set("sort", filters.sort);
-  if (filters.q) params.set("q", filters.q);
-  if (filters.category) params.set("category", filters.category);
-  if (filters.gender) params.set("gender", filters.gender);
-  if (filters.size) params.set("size", filters.size);
-  if (filters.bodyType) params.set("bodyType", filters.bodyType);
-  if (filters.brand) params.set("brand", filters.brand);
-  if (filters.minPrice) params.set("minPrice", filters.minPrice);
-  if (filters.maxPrice) params.set("maxPrice", filters.maxPrice);
-  if (filters.isTryonEnabled) params.set("isTryonEnabled", "true");
+function filterDemoProducts(filters: Filters, page: number): ProductPage {
+  let items = [...DEMO_PRODUCTS];
+  if (filters.q) {
+    const q = filters.q.toLowerCase();
+    items = items.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        (p.brandName?.toLowerCase().includes(q) ?? false)
+    );
+  }
+  if (filters.category) items = items.filter((p) => p.garmentType === filters.category);
+  if (filters.gender) items = items.filter((p) => p.gender === filters.gender || p.gender === "unisex");
+  if (filters.size) items = items.filter((p) => p.sizes.includes(filters.size));
+  if (filters.bodyType) items = items.filter((p) => p.suitableBodyTypes.includes(filters.bodyType));
+  if (filters.brand) items = items.filter((p) => p.brandName === filters.brand);
+  if (filters.minPrice) items = items.filter((p) => p.price >= Number(filters.minPrice));
+  if (filters.maxPrice) items = items.filter((p) => p.price <= Number(filters.maxPrice));
+  if (filters.isTryonEnabled) items = items.filter((p) => p.isTryonEnabled);
 
-  const res = await api.get<{ data: ProductPage }>(`/products?${params}`);
-  return res.data.data;
+  if (filters.sort === "price_asc") items.sort((a, b) => a.price - b.price);
+  else if (filters.sort === "price_desc") items.sort((a, b) => b.price - a.price);
+
+  const total = items.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const start = (page - 1) * PAGE_SIZE;
+  return {
+    items: items.slice(start, start + PAGE_SIZE),
+    total,
+    page,
+    pageSize: PAGE_SIZE,
+    totalPages,
+  };
+}
+
+async function fetchProducts(filters: Filters, page: number): Promise<ProductPage> {
+  try {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("pageSize", String(PAGE_SIZE));
+    params.set("sort", filters.sort);
+    if (filters.q) params.set("q", filters.q);
+    if (filters.category) params.set("category", filters.category);
+    if (filters.gender) params.set("gender", filters.gender);
+    if (filters.size) params.set("size", filters.size);
+    if (filters.bodyType) params.set("bodyType", filters.bodyType);
+    if (filters.brand) params.set("brand", filters.brand);
+    if (filters.minPrice) params.set("minPrice", filters.minPrice);
+    if (filters.maxPrice) params.set("maxPrice", filters.maxPrice);
+    if (filters.isTryonEnabled) params.set("isTryonEnabled", "true");
+
+    const res = await api.get<{ data: ProductPage }>(`/products?${params}`);
+    return res.data.data;
+  } catch {
+    return filterDemoProducts(filters, page);
+  }
 }
 
 // ─── Filter panel (shared between sidebar and sheet) ─────────────────────────
@@ -126,7 +165,7 @@ function FilterPanel({
               className={cn(
                 "px-3 py-1 rounded-full text-xs border capitalize transition-colors",
                 filters.category === cat
-                  ? "bg-purple-600 text-white border-purple-600"
+                  ? "bg-brand-primary text-white border-brand-primary"
                   : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
               )}
             >
@@ -149,7 +188,7 @@ function FilterPanel({
               className={cn(
                 "px-3 py-1 rounded-full text-xs border transition-colors",
                 filters.gender === g.value
-                  ? "bg-purple-600 text-white border-purple-600"
+                  ? "bg-brand-primary text-white border-brand-primary"
                   : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
               )}
             >
@@ -172,7 +211,7 @@ function FilterPanel({
               className={cn(
                 "w-12 py-1 rounded-md text-xs border transition-colors",
                 filters.size === s
-                  ? "bg-purple-600 text-white border-purple-600"
+                  ? "bg-brand-primary text-white border-brand-primary"
                   : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
               )}
             >
@@ -195,7 +234,7 @@ function FilterPanel({
               className={cn(
                 "w-full text-left px-3 py-1.5 rounded-lg text-xs border transition-colors",
                 filters.bodyType === bt.value
-                  ? "bg-purple-600 text-white border-purple-600"
+                  ? "bg-brand-primary text-white border-brand-primary"
                   : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
               )}
             >
@@ -210,12 +249,22 @@ function FilterPanel({
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
           Brand
         </p>
-        <Input
-          placeholder="Search brand..."
-          value={filters.brand}
-          onChange={(e) => onChange("brand", e.target.value)}
-          className="h-8 text-xs"
-        />
+        <div className="space-y-1.5">
+          {DEMO_BRANDS.map((b) => (
+            <button
+              key={b}
+              onClick={() => onChange("brand", filters.brand === b ? "" : b)}
+              className={cn(
+                "w-full text-left px-3 py-1.5 rounded-lg text-xs border transition-colors",
+                filters.brand === b
+                  ? "bg-brand-primary text-white border-brand-primary"
+                  : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
+              )}
+            >
+              {b}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Price range */}
@@ -248,7 +297,7 @@ function FilterPanel({
           type="checkbox"
           checked={filters.isTryonEnabled}
           onChange={(e) => onChange("isTryonEnabled", e.target.checked)}
-          className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+          className="rounded border-gray-300 text-brand-primary focus:ring-brand-primary"
         />
         <span className="text-sm text-gray-700">Try-on enabled only</span>
       </label>
@@ -374,7 +423,7 @@ export default function ShopPage() {
         {profile?.bodyType && (
           <p className="text-sm text-gray-500 mt-1">
             Showing results compatible with your{" "}
-            <span className="text-purple-600 font-medium capitalize">
+            <span className="text-brand-primary font-medium capitalize">
               {profile.bodyType.toLowerCase()}
             </span>{" "}
             body type
@@ -417,7 +466,7 @@ export default function ShopPage() {
               {suggestions.map((s) => (
                 <button
                   key={s.id}
-                  className="w-full text-left px-4 py-2 text-sm hover:bg-purple-50 transition-colors"
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-brand-primary/5 transition-colors"
                   onMouseDown={(e) => {
                     e.preventDefault();
                     setSearch(s.name);
@@ -451,14 +500,14 @@ export default function ShopPage() {
         <div className="hidden sm:flex border rounded-lg overflow-hidden">
           <button
             onClick={() => setViewMode("grid")}
-            className={cn("p-2", viewMode === "grid" ? "bg-purple-100 text-purple-700" : "text-gray-400 hover:text-gray-600")}
+            className={cn("p-2", viewMode === "grid" ? "bg-brand-primary/10 text-brand-primary" : "text-gray-400 hover:text-gray-600")}
             aria-label="Grid view"
           >
             <LayoutGrid className="h-4 w-4" />
           </button>
           <button
             onClick={() => setViewMode("list")}
-            className={cn("p-2", viewMode === "list" ? "bg-purple-100 text-purple-700" : "text-gray-400 hover:text-gray-600")}
+            className={cn("p-2", viewMode === "list" ? "bg-brand-primary/10 text-brand-primary" : "text-gray-400 hover:text-gray-600")}
             aria-label="List view"
           >
             <List className="h-4 w-4" />
@@ -467,16 +516,18 @@ export default function ShopPage() {
 
         {/* Mobile filter trigger */}
         <Sheet>
-          <SheetTrigger>
-            <Button variant="outline" className="lg:hidden relative">
-              <SlidersHorizontal className="h-4 w-4 mr-2" />
-              Filters
-              {activeFilterCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-purple-600 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center">
-                  {activeFilterCount}
-                </span>
-              )}
-            </Button>
+          <SheetTrigger
+            className={cn(
+              "lg:hidden relative inline-flex shrink-0 items-center justify-center rounded-lg border border-border bg-background px-2.5 h-8 text-sm font-medium transition-all hover:bg-muted hover:text-foreground"
+            )}
+          >
+            <SlidersHorizontal className="h-4 w-4 mr-2" />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-brand-primary text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
           </SheetTrigger>
           <SheetContent side="left" className="w-72 overflow-y-auto">
             <SheetHeader>
@@ -501,7 +552,7 @@ export default function ShopPage() {
             {activeFilterCount > 0 && (
               <button
                 onClick={resetFilters}
-                className="text-xs text-purple-600 hover:underline"
+                className="text-xs text-brand-primary hover:underline"
               >
                 Clear ({activeFilterCount})
               </button>
@@ -588,7 +639,7 @@ export default function ShopPage() {
           <div ref={loadMoreRef} className="h-8 mt-6">
             {isFetchingNextPage && (
               <div className="flex justify-center">
-                <div className="h-6 w-6 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
+                <div className="h-6 w-6 border-2 border-brand-primary border-t-transparent rounded-full animate-spin" />
               </div>
             )}
           </div>

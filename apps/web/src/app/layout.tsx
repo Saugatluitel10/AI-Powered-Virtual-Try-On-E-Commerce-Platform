@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Geist, Noto_Sans_Devanagari } from "next/font/google";
+import { Noto_Sans_Devanagari } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import "./globals.css";
@@ -10,12 +10,10 @@ import { cn } from "@/lib/utils";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 import { WebVitals } from "@/components/WebVitals";
 
-const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
-const inter = Inter({ subsets: ["latin"] });
 const devanagari = Noto_Sans_Devanagari({ subsets: ["devanagari"], weight: ["400", "500", "600", "700"], variable: "--font-devanagari" });
 
 export const viewport: Viewport = {
-  themeColor: "#7c3aed",
+  themeColor: "#000000",
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
@@ -43,14 +41,20 @@ export default async function RootLayout({
   const messages = await getMessages();
 
   return (
-    <html lang={locale} suppressHydrationWarning className={cn("font-sans", geist.variable, devanagari.variable)}>
+    <html lang={locale} suppressHydrationWarning className={cn(devanagari.variable)}>
       <head>
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Hanken+Grotesk:wght@400;500;700&display=swap"
+          rel="stylesheet"
+        />
       </head>
-      <body className={`${inter.className} min-h-full flex flex-col`}>
+      <body className="min-h-full flex flex-col font-body bg-surface text-on-surface selection:bg-secondary-container">
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:bg-purple-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:bg-primary focus:text-on-primary focus:px-4 focus:py-2"
         >
           Skip to main content
         </a>

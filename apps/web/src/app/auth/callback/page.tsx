@@ -36,20 +36,20 @@ export default function AuthCallbackPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-surface">
         <div className="text-center">
-          <p className="text-red-600 mb-4">{error}</p>
-          <a href="/login" className="text-purple-600 underline">Back to login</a>
+          <p className="text-error mb-4">{error}</p>
+          <a href="/login" className="text-primary font-bold editorial-underline">Back to login</a>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
+    <div className="min-h-screen flex items-center justify-center bg-surface">
       <div className="text-center">
-        <Loader2 className="w-8 h-8 text-purple-500 animate-spin mx-auto mb-4" />
-        <p className="text-gray-500">Completing sign in...</p>
+        <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto mb-4" />
+        <p className="text-on-surface-variant">Completing sign in...</p>
       </div>
     </div>
   );
