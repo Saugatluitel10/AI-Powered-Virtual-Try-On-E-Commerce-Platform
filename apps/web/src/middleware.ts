@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PROTECTED_PREFIXES = ["/profile", "/orders", "/wardrobe", "/checkout", "/upload", "/analysis", "/tryon", "/onboarding", "/stylist", "/brand", "/admin"];
+const PROTECTED_PREFIXES = ["/profile", "/orders", "/wardrobe", "/checkout", "/upload", "/analysis", "/tryon", "/onboarding", "/stylist", "/brand"];
 const AUTH_ROUTES = ["/login", "/signup"];
 
 const CSP_DIRECTIVES = [

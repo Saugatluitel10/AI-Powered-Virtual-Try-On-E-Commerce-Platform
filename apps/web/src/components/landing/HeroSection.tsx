@@ -23,8 +23,7 @@ export default function HeroSection() {
         </div>
 
         <h1 className="font-display text-[48px] sm:text-[64px] leading-[1.1] tracking-tight text-on-primary mb-6">
-          Try before you buy.{" "}
-          <em className="not-italic text-secondary-fixed-dim">Without the fitting room.</em>
+          Wear the future.
         </h1>
 
         <p className="text-lg text-on-primary/70 leading-relaxed max-w-xl mx-auto mb-10">

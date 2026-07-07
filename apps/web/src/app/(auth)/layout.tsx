@@ -17,7 +17,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               <span className="font-display text-4xl tracking-widest">VTryon</span>
             </div>
             <h1 className="font-display text-[56px] leading-[1.1] text-on-primary mb-6">
-              Try before you buy
+              Wear the future
             </h1>
             <p className="text-on-primary/70 text-lg leading-relaxed">
               Upload your photo and virtually try on thousands of outfits with AI-powered precision.

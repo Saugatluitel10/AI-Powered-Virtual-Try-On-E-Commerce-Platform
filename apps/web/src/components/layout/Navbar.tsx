@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ShoppingBag, User, Menu, X, LogOut, Bell } from "lucide-react";
+import { ShoppingBag, User, Menu, X, LogOut, Bell, Shield } from "lucide-react";
 import { useState, useCallback, useEffect } from "react";
 import { useAuthStore } from "@/store/authStore";
 import { useCartStore } from "@/store/cartStore";
@@ -105,6 +105,15 @@ export default function Navbar() {
                   </span>
                 )}
               </button>
+
+              <Link
+                href="/admin/login"
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-outline-variant/50 text-[10px] font-bold uppercase tracking-[0.15em] text-on-surface-variant hover:text-primary hover:border-primary transition-all"
+                aria-label="Admin Panel"
+              >
+                <Shield className="w-3.5 h-3.5" aria-hidden="true" />
+                <span className="hidden sm:inline">Admin</span>
+              </Link>
 
               {isAuthenticated ? (
                 <div className="flex items-center gap-2">
