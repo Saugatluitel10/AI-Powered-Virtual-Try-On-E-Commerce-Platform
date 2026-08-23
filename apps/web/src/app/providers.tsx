@@ -2,10 +2,9 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, useEffect, Suspense } from "react";
-import { initPostHog, identifyUser, resetUser } from "@/lib/posthog";
-import { PostHogProvider } from "@/components/providers/PostHogProvider";
-import { createClient } from "@/lib/supabase";
+import { getLocalSession } from "@/lib/local-auth";
 import { useAuthStore } from "@/store/authStore";
+import { useCartStore } from "@/store/cartStore";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -20,36 +19,14 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   const { setAuth, setLoading } = useAuthStore();
 
   useEffect(() => {
-    initPostHog();
-  }, []);
-
-  useEffect(() => {
-    const supabase = createClient();
-
-    // Hydrate on mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setAuth(session?.user ?? null, session);
-    });
-
-    // Keep in sync with Supabase auth events
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAuth(session?.user ?? null, session);
-      if (session?.user) {
-        identifyUser(session.user.id, { email: session.user.email });
-      } else {
-        resetUser();
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    setAuth(getLocalSession());
+    void useCartStore.persist.rehydrate();
   }, [setAuth, setLoading]);
 
   return (
     <QueryClientProvider client={queryClient}>
       <Suspense fallback={null}>
-        <PostHogProvider>{children}</PostHogProvider>
+        {children}
       </Suspense>
     </QueryClientProvider>
   );

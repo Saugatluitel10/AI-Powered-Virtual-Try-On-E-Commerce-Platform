@@ -1,16 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Noto_Sans_Devanagari } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import "./globals.css";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import Providers from "./providers";
-import { cn } from "@/lib/utils";
-import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
-import { WebVitals } from "@/components/WebVitals";
-
-const devanagari = Noto_Sans_Devanagari({ subsets: ["devanagari"], weight: ["400", "500", "600", "700"], variable: "--font-devanagari" });
 
 export const viewport: Viewport = {
   themeColor: "#000000",
@@ -20,15 +14,15 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "VTryon — AI Virtual Try-On Fashion Platform",
+  title: "prashna.clo | Clothing that fits your life",
   description:
-    "Upload your photo and virtually try on thousands of outfits. Nepal's first AI-powered fashion platform with personalized styling recommendations.",
+    "Shop a locally powered Nepalese fashion catalogue with camera-assisted style recommendations.",
   keywords: ["virtual try-on", "AI fashion", "Nepal", "online shopping", "styling"],
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "VTryon",
+    title: "prashna.clo",
   },
 };
 
@@ -41,15 +35,9 @@ export default async function RootLayout({
   const messages = await getMessages();
 
   return (
-    <html lang={locale} suppressHydrationWarning className={cn(devanagari.variable)}>
+    <html lang={locale} suppressHydrationWarning>
       <head>
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Hanken+Grotesk:wght@400;500;700&display=swap"
-          rel="stylesheet"
-        />
       </head>
       <body className="min-h-full flex flex-col font-body bg-surface text-on-surface selection:bg-secondary-container">
         <a
@@ -67,8 +55,6 @@ export default async function RootLayout({
             <Footer />
           </Providers>
         </NextIntlClientProvider>
-        <ServiceWorkerRegistrar />
-        <WebVitals />
       </body>
     </html>
   );

@@ -19,8 +19,7 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", ".env.test"],
-      "outputs": ["coverage/**"]
+      "inputs": ["$TURBO_DEFAULT$", ".env.test"]
     },
     "db:generate": {
       "cache": false

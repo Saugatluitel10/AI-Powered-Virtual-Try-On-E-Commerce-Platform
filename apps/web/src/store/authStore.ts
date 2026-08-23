@@ -1,23 +1,21 @@
 "use client";
 
 import { create } from "zustand";
-import type { User, Session } from "@supabase/supabase-js";
+import type { LocalUser } from "@/lib/local-auth";
 
 interface AuthState {
-  user: User | null;
-  session: Session | null;
+  user: LocalUser | null;
   loading: boolean;
-  setAuth: (user: User | null, session: Session | null) => void;
+  setAuth: (user: LocalUser | null) => void;
   setLoading: (loading: boolean) => void;
   clear: () => void;
 }
 
 export const useAuthStore = create<AuthState>()((set) => ({
   user: null,
-  session: null,
   loading: true,
 
-  setAuth: (user, session) => set({ user, session, loading: false }),
+  setAuth: (user) => set({ user, loading: false }),
   setLoading: (loading) => set({ loading }),
-  clear: () => set({ user: null, session: null, loading: false }),
+  clear: () => set({ user: null, loading: false }),
 }));

@@ -5,7 +5,7 @@
   "main": "dist/vtryon-widget.js",
   "files": ["dist"],
   "scripts": {
-    "build": "tsup src/widget.ts --format iife --global-name VTryon --minify --out-dir dist --entry src/widget.ts --name vtryon-widget"
+    "build": "tsup src/widget.ts --format iife --global-name VTryon --minify --out-dir dist"
   },
   "keywords": ["virtual-try-on", "widget", "embed", "iframe"],
   "license": "MIT",

@@ -14,10 +14,13 @@ export interface ProductListItem {
   suitableBodyTypes: string[];
   primaryImageUrl: string | null;
   brandName: string | null;
+  color: string;
+  colors: string[];
+  style: string;
+  description: string;
 }
 
 export interface Product extends ProductListItem {
-  description: string | null;
   images: string[];
   brandId: string;
   createdAt: string;

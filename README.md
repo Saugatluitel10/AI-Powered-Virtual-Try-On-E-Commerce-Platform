@@ -1,257 +1,127 @@
-# 👗 Virtual Try-On — AI-Powered E-Commerce Platform
+# prashna.clo
 
-An AI-powered fashion platform where users upload a photo, virtually try on clothes, get personalized styling advice from Claude, and shop with confidence. Initial market: Nepal. Business model: SaaS for retailers globally.
+`prashna.clo` is a zero-cost, local-first fashion e-commerce college project. The complete shopping experience runs in the Next.js frontend without a hosted database, paid API, payment credentials, Redis, cloud storage, or cloud AI.
 
-![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)
-![Express](https://img.shields.io/badge/Express-4-grey?logo=express)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?logo=fastapi)
-![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript)
-![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python)
-![License](https://img.shields.io/badge/license-private-red)
+## Requirements
 
----
+- Node.js 20 or newer
+- pnpm 9 or newer; pnpm 11.19.0 is recommended
+- A current version of Chrome, Edge, Firefox, or Safari
+- About 2 GB of free disk space for dependencies
 
-## ✨ Features
+The project uses Next.js 16, React 19, TypeScript, Tailwind CSS, Zustand, TanStack Query, and Lucide icons. All required JavaScript packages are installed by pnpm.
 
-- **Virtual Try-On** — Upload a photo and see how any garment looks on you, powered by IDM-VTON / OOTDiffusion via Replicate
-- **AI Body Scanning** — Automatic body measurements using MediaPipe Pose + BlazePose Heavy
-- **Smart Size Prediction** — ML-based sizing with South Asian size chart fallback
-- **AI Stylist** — Personalized styling advice powered by Claude (complete-the-look, recommendations)
-- **Multi-Payment** — Stripe (international), eSewa & Khalti (Nepal) with server-side signature verification
-- **Multi-Tenant SaaS** — Retailers onboard their own store and manage products
-- **Admin Panel** — Role-based admin dashboard with store management, analytics, and editorial tools
-- **Embeddable SDK** — Drop a try-on widget into any retailer's site
+## Install
 
----
-
-## 🏗 Architecture
-
-```
-┌───────────────┐     ┌───────────────┐     ┌───────────────────┐
-│   Next.js 14  │────▶│  Express API  │────▶│  FastAPI AI Svc   │
-│  (Vercel)     │     │  (Railway)    │     │  (Modal.com)      │
-└───────────────┘     └───────┬───────┘     └─────────┬─────────┘
-                              │                       │
-                    ┌─────────┴─────────┐    ┌────────┴────────┐
-                    │  PostgreSQL       │    │  Replicate      │
-                    │  (Supabase)       │    │  (GPU inference)│
-                    │  + Auth + Storage │    │  Modal (A10G)   │
-                    └─────────┬─────────┘    └─────────────────┘
-                              │
-                    ┌─────────┴─────────┐
-                    │  Redis (BullMQ)   │
-                    └───────────────────┘
-```
-
----
-
-## 📁 Monorepo Structure
-
-```
-/
-├── apps/
-│   ├── web/             # Next.js 14 App Router — storefront & admin UI
-│   ├── api/             # Node.js + Express — REST API + background jobs
-│   └── ai-service/      # Python FastAPI — AI/ML orchestration (internal only)
-├── packages/
-│   ├── types/           # @vtryon/types — shared TypeScript interfaces
-│   ├── config/          # @vtryon/config — env schemas + constants
-│   ├── sdk/             # @vtryon/sdk — client SDK for API consumers
-│   └── embed/           # @vtryon/embed — embeddable try-on widget
-├── turbo.json           # Turborepo task config
-├── pnpm-workspace.yaml  # pnpm workspaces
-├── docker-compose.yml   # Local dev services
-└── .github/workflows/   # CI/CD (ci.yml, deploy.yml, doppler-sync.yml)
-```
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- **Node.js** ≥ 20
-- **pnpm** ≥ 9 — `corepack enable && corepack prepare pnpm@9 --activate`
-- **Python** 3.11 (for the AI service)
-- **Docker** (for local PostgreSQL + Redis)
-- **Doppler CLI** (optional, for secrets in production)
-
-### 1. Clone & Install
+Clone or download the repository, open a terminal in its root directory, and run:
 
 ```bash
-git clone https://github.com/Saugatluitel10/AI-Powered-Virtual-Try-On-E-Commerce-Platform.git
-cd AI-Powered-Virtual-Try-On-E-Commerce-Platform
+corepack enable
+corepack prepare pnpm@11.19.0 --activate
 pnpm install
 ```
 
-### 2. Set Up Environment Variables
+If pnpm is already installed, only `pnpm install` is required.
+
+No `.env` file, API key, database migration, seed command, or external service is required for the core application. Product data and images are included in the repository.
+
+## Run Locally
+
+From the repository root:
 
 ```bash
-cp .env.example .env
+pnpm dev
 ```
 
-Fill in the required values — see `.env.example` for the full list. Key groups:
+Open [http://localhost:3000](http://localhost:3000). Stop the server with `Ctrl+C`.
 
-| Group | Variables |
-|-------|-----------|
-| **Supabase** | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`, `DATABASE_URL` |
-| **Payments** | `STRIPE_SECRET_KEY`, `ESEWA_MERCHANT_CODE`, `KHALTI_SECRET_KEY` |
-| **AI** | `REPLICATE_API_TOKEN`, `ANTHROPIC_API_KEY`, `MODAL_TOKEN_ID` |
-| **Email** | `RESEND_API_KEY` |
-| **CDN** | `CLOUDINARY_URL` |
-| **Monitoring** | `SENTRY_DSN`, `POSTHOG_KEY` |
-
-### 3. Start Local Services
+If port 3000 is already being used, run:
 
 ```bash
-docker compose up -d   # PostgreSQL + Redis
+pnpm --filter frontend exec next dev --port 3001
 ```
 
-### 4. Set Up the Database
+Then open `http://localhost:3001`.
+
+## Open On Another Device
+
+The laptop running the project and the second device must be connected to the same Wi-Fi or local network.
+
+1. Start the app on the laptop with `pnpm dev`.
+2. Look for the `Network` address printed in the terminal, such as `http://192.168.1.67:3000`.
+3. Open that address in the browser on the phone, tablet, or other computer.
+4. Allow incoming network access if the laptop firewall asks for permission.
+
+If Next.js does not print a network address, start it explicitly on all network interfaces:
 
 ```bash
-pnpm db:generate       # Generate Prisma client
-pnpm db:migrate        # Run migrations
+pnpm --filter frontend exec next dev --hostname 0.0.0.0 --port 3000
 ```
 
-### 5. Run Development Servers
+Find the laptop's local IP address when needed:
 
 ```bash
-pnpm dev               # Starts all apps via Turborepo
+# macOS, usually Wi-Fi
+ipconfig getifaddr en0
+
+# Linux
+hostname -I
+
+# Windows
+ipconfig
 ```
 
-| App | URL |
-|-----|-----|
-| Web (Next.js) | `http://localhost:3000` |
-| API (Express) | `http://localhost:4000` |
-| AI Service (FastAPI) | `http://localhost:8000` |
+Use `http://LAPTOP_IP:3000` on the second device. For example: `http://192.168.1.67:3000`.
 
-### AI Service (standalone)
+Accounts, carts, and orders are stored separately in each browser. Signing in or adding an item on one device does not copy that local data to another device.
+
+### Camera On Other Devices
+
+Live camera access uses `navigator.mediaDevices.getUserMedia()`. It works on `localhost`, but many browsers block camera permission on a plain `http://192.168.x.x` address because it is not a secure context. Image upload continues to work over the local network and is the recommended no-cost fallback. This restriction comes from the browser, not from `prashna.clo`.
+
+## Demo Account
+
+- Email: `demo@prashna.clo`
+- Password: `Demo@123`
+
+New account signup also works. Accounts use salted SHA-256 password hashes and are stored only in the current browser for this local demonstration.
+
+## Features
+
+- 30 realistic products with matching local images and NPR prices
+- Working category, gender, color, size, style, search, and price filters
+- Product details, size selection, and persistent local cart
+- Local checkout, confirmation, and order history
+- Fonepay, eSewa, Khalti, card, and Cash on Delivery demonstrations
+- Browser camera capture and JPG, JPEG, PNG, or WebP upload
+- Local image analysis and catalogue-based clothing recommendations
+- Responsive desktop, tablet, and mobile layouts
+
+All online payment flows are simulations. No real transaction is processed, and card values are never stored or transmitted.
+
+## Commands
 
 ```bash
-cd apps/ai-service
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+pnpm dev          # Start the frontend development server
+pnpm lint         # Run frontend lint checks
+pnpm type-check   # Run frontend TypeScript checks
+pnpm test         # Run the repository test suite
+pnpm build        # Create the frontend production build
 ```
 
----
-
-## 📜 Scripts
-
-Run all commands from the repo root with `pnpm`:
-
-| Command | Description |
-|---------|-------------|
-| `pnpm dev` | Start all apps in dev mode |
-| `pnpm build` | Build all apps and packages |
-| `pnpm lint` | Lint all packages |
-| `pnpm type-check` | TypeScript strict type checking |
-| `pnpm test` | Run all test suites |
-| `pnpm db:generate` | Regenerate Prisma client |
-| `pnpm db:migrate` | Run Prisma migrations |
-| `pnpm format` | Format code with Prettier |
-
----
-
-## 🔑 API Overview
-
-All routes are prefixed with `/api/v1/`. Auth via `Authorization: Bearer <supabase-jwt>`.
-
-| Module | Endpoints | Description |
-|--------|-----------|-------------|
-| **Auth** | `/auth/*` | Register, login, refresh, logout, /me |
-| **Users** | `/users/*` | Profile, body profile, photo, orders, wishlist |
-| **Products** | `/products/*` | CRUD, filtering, variants, images |
-| **Orders** | `/orders/*` | Create, detail, cancel |
-| **Cart** | `/cart/*` | Add, update, remove items |
-| **Try-On** | `/try-on/*` | Create session, poll result, history, body-scan |
-| **Recommendations** | `/recommendations/*` | AI style advice, for-me, complete-the-look |
-| **Reviews** | `/reviews/*` | Product reviews & ratings |
-| **Payments** | `/payments/*` | Stripe, eSewa, Khalti processing |
-| **Admin** | `/admin/*` | Dashboard stats, store management |
-| **Tenants** | `/tenants/*` | Multi-tenant store onboarding |
-| **Public API** | `/public/*` | Embeddable widget endpoints |
-
-**Response format:**
-```jsonc
-// Success
-{ "data": T }
-
-// Error
-{ "error": "message", "statusCode": 400 }
-
-// Paginated
-{ "data": T[], "total": number, "page": number, "pageSize": number, "totalPages": number }
-```
-
----
-
-## 🤖 AI Pipeline
-
-```
-User Photo
-   │
-   ▼
-Background Removal (rembg / SAM 2)
-   │
-   ▼
-Body Pose Estimation (MediaPipe + BlazePose Heavy)
-   │
-   ├──▶ Size Prediction (scikit-learn + SA size chart fallback)
-   │
-   ▼
-Virtual Try-On (IDM-VTON via Replicate)
-   │
-   ▼
-Result → Supabase Storage → Frontend polls for completion
-   │
-   ▼
-AI Stylist (Claude) → Personalized recommendations
-```
-
----
-
-## 🧪 Testing
+To validate every workspace package, including the optional API, SDK, and embed widget:
 
 ```bash
-pnpm test                       # All suites
-cd apps/api && pnpm test        # Backend only
-cd apps/web && pnpm test        # Frontend only
+pnpm exec turbo build
 ```
 
-Backend API tests live in `apps/api/src/routes/__tests__/`.
+The optional API and older third-party integration code remain available for future development, but they are not started by `pnpm dev` and are not required for the local shopping application.
 
----
+## Troubleshooting
 
-## 🚢 Deployment
-
-| Service | Platform | Config |
-|---------|----------|--------|
-| Frontend | Vercel | Auto-deploy from `main` |
-| API | Railway | `apps/api/Dockerfile` |
-| AI Service | Modal.com | `apps/ai-service/Dockerfile` |
-| Database | Supabase | Managed PostgreSQL |
-| Secrets | Doppler | `doppler.yaml` — project: `vtryon` |
-
-CI/CD via GitHub Actions:
-- **`ci.yml`** — Lint, type-check, test on every PR
-- **`deploy.yml`** — Deploy on merge to `main`
-- **`doppler-sync.yml`** — Sync secrets from Doppler
-
----
-
-## 🛠 Tech Stack Summary
-
-| Layer | Technology |
-|-------|-----------|
-| Frontend | Next.js 14, TypeScript, Tailwind CSS, shadcn/ui, Zustand, TanStack Query, Konva.js |
-| Backend | Node.js 20, Express, Prisma, PostgreSQL (Supabase), BullMQ, Redis |
-| AI Service | Python 3.11, FastAPI, MediaPipe, scikit-learn, Replicate, Anthropic Claude |
-| Payments | Stripe, eSewa, Khalti |
-| Infrastructure | Vercel, Railway, Modal.com, Supabase, Doppler, Sentry, PostHog |
-
----
-
-## 📄 License
-
-Private — all rights reserved.
+- **The page does not open:** confirm the terminal still shows the Next.js server as ready.
+- **Port 3000 is busy:** use the port 3001 command above.
+- **Another device cannot connect:** verify both devices are on the same network and allow Node.js through the laptop firewall.
+- **Camera permission is denied:** enable camera permission for the site, close other camera apps, or use Upload Photo.
+- **Local data looks empty:** browser accounts, carts, and orders are device-specific and browser-specific.
+- **Dependencies behave unexpectedly:** delete `node_modules`, then run `pnpm install` again.

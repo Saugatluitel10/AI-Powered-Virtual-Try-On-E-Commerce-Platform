@@ -1,22 +1,10 @@
 import Link from "next/link";
 
 export default function Footer() {
-  return (
-    <footer className="bg-surface-bright border-t border-outline-variant/20 mt-24">
-      <div className="flex flex-col md:flex-row justify-between items-center max-w-[1280px] mx-auto px-6 lg:px-16 py-12">
-        <div className="flex flex-col items-center md:items-start gap-4 mb-8 md:mb-0">
-          <span className="font-display text-[24px] uppercase tracking-widest text-primary">VTRYON</span>
-          <p className="text-on-surface-variant text-sm">
-            &copy; {new Date().getFullYear()} VTryon Luxury Tech. All rights reserved.
-          </p>
-        </div>
-        <div className="flex flex-wrap justify-center gap-8">
-          <Link href="/privacy" className="text-[12px] font-bold uppercase tracking-[0.1em] text-on-surface-variant hover:text-secondary transition-colors">Privacy Policy</Link>
-          <Link href="/terms" className="text-[12px] font-bold uppercase tracking-[0.1em] text-on-surface-variant hover:text-secondary transition-colors">Terms of Service</Link>
-          <Link href="/about" className="text-[12px] font-bold uppercase tracking-[0.1em] text-on-surface-variant hover:text-secondary transition-colors">Sustainability</Link>
-          <Link href="/contact" className="text-[12px] font-bold uppercase tracking-[0.1em] text-on-surface-variant hover:text-secondary transition-colors">Press</Link>
-        </div>
-      </div>
-    </footer>
-  );
+  return <footer className="mt-20 border-t border-black/10 bg-[#20231f] text-white">
+    <div className="mx-auto flex max-w-[1280px] flex-col justify-between gap-6 px-6 py-10 sm:flex-row sm:items-end">
+      <div><p className="font-display text-2xl font-bold">prashna<span className="text-[#e96b72]">.clo</span></p><p className="mt-2 max-w-sm text-sm text-white/60">Local fashion shopping with honest, AI-assisted product matching.</p></div>
+      <div className="flex gap-6 text-sm"><Link href="/shop">Shop</Link><Link href="/stylist">Style Match</Link><Link href="/privacy">Privacy</Link></div>
+    </div>
+  </footer>;
 }

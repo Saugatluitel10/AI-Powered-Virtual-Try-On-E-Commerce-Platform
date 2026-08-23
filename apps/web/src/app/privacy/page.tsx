@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — VTryon",
-  description: "How VTryon collects, uses, and protects your data including body measurement information.",
+  title: "Privacy Policy | prashna.clo",
+  description: "How prashna.clo handles locally stored shopping and image data.",
 };
 
 export default function PrivacyPolicyPage() {
@@ -12,7 +12,7 @@ export default function PrivacyPolicyPage() {
       <p className="text-sm text-gray-500">Last updated: June 2026</p>
 
       <p>
-        VTryon (&quot;we&quot;, &quot;our&quot;, or &quot;the Platform&quot;) is committed to protecting your privacy. This policy
+        prashna.clo (&quot;we&quot;, &quot;our&quot;, or &quot;the Platform&quot;) is committed to protecting your privacy. This policy
         explains how we collect, use, store, and share your personal data — including sensitive body
         measurement data — when you use our AI-powered virtual try-on platform.
       </p>
@@ -91,7 +91,7 @@ export default function PrivacyPolicyPage() {
         <li><strong>Access</strong> your data by visiting your Profile page.</li>
         <li><strong>Delete</strong> your body profile and photo from the Profile settings.</li>
         <li><strong>Export</strong> your data by contacting support.</li>
-        <li><strong>Delete your account</strong> entirely — email <a href="mailto:privacy@vtryon.com">privacy@vtryon.com</a>.</li>
+        <li><strong>Delete your account</strong> by clearing this site&apos;s local browser data.</li>
       </ul>
 
       <h2>6. Security</h2>
@@ -105,7 +105,7 @@ export default function PrivacyPolicyPage() {
 
       <h2>7. Children</h2>
       <p>
-        VTryon is not intended for users under 16. We do not knowingly collect personal data
+        prashna.clo is not intended for users under 16. We do not knowingly collect personal data
         from children.
       </p>
 
@@ -119,7 +119,7 @@ export default function PrivacyPolicyPage() {
       <h2>9. Contact</h2>
       <p>
         For questions about this policy or to exercise your data rights, contact us at{" "}
-        <a href="mailto:privacy@vtryon.com">privacy@vtryon.com</a>.
+        This local demonstration does not send account or image data to a remote service.
       </p>
     </article>
   );

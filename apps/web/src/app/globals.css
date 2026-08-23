@@ -6,8 +6,8 @@
 
 @theme inline {
   /* ─── Luxury Design System ────────────────────────────────────────── */
-  --font-display: "Playfair Display", serif;
-  --font-body: "Hanken Grotesk", sans-serif;
+  --font-display: Georgia, "Times New Roman", serif;
+  --font-body: Arial, Helvetica, sans-serif;
 
   --color-primary: #000000;
   --color-on-primary: #ffffff;
@@ -20,8 +20,8 @@
   --color-secondary-fixed: #ffdea8;
   --color-secondary-fixed-dim: #e6c183;
 
-  --color-surface: #f6faff;
-  --color-surface-bright: #f6faff;
+  --color-surface: #f8f7f3;
+  --color-surface-bright: #ffffff;
   --color-surface-dim: #d2dbe4;
   --color-surface-container: #e6eff8;
   --color-surface-container-low: #ecf5fe;
@@ -90,6 +90,7 @@
   }
   body {
     @apply bg-background text-foreground;
+    letter-spacing: 0;
   }
   html {
     @apply font-body;
@@ -112,4 +113,17 @@
 }
 .editorial-underline:hover::after {
   transform: scaleX(1);
+}
+
+.nepal-nav::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 7px;
+  background: #b61f32;
+  clip-path: polygon(0 100%, 7% 100%, 11% 40%, 15% 100%, 24% 100%, 29% 25%, 34% 100%, 46% 100%, 50% 52%, 54% 100%, 66% 100%, 72% 18%, 78% 100%, 88% 100%, 92% 48%, 96% 100%, 100% 100%);
+  opacity: 0.55;
+  pointer-events: none;
 }
