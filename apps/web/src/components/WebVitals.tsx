@@ -24,8 +24,10 @@ function sendToAnalytics(metric: WebVitalMetric) {
   }
 
   if (typeof window !== "undefined" && "posthog" in window) {
-    (window as Record<string, unknown>).posthog &&
-      (window.posthog as { capture?: (event: string, props: Record<string, unknown>) => void })?.capture?.("web_vital", {
+    const posthog = window.posthog as
+      | { capture?: (event: string, props: Record<string, unknown>) => void }
+      | undefined;
+    posthog?.capture?.("web_vital", {
         metric_name: metric.name,
         metric_value: metric.value,
         metric_rating: metric.rating,

@@ -5,7 +5,6 @@ import { History, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import api from "@/lib/api";
 import type { MeasurementHistoryEntry } from "@/types/body";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
 
 const LABELS: Record<string, string> = {
   heightCm: "Height",

@@ -101,6 +101,7 @@ export default function ProfilePage() {
               <div className="relative">
                 <div className="w-14 h-14 bg-purple-100 rounded-full flex items-center justify-center overflow-hidden">
                   {profile?.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- legacy profile URLs may use arbitrary local API hosts
                     <img src={profile.avatarUrl} alt="" className="w-full h-full object-cover" />
                   ) : (
                     <User className="w-7 h-7 text-purple-600" />

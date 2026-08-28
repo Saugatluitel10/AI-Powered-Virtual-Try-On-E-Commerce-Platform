@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Code, Key, Webhook, Package, Terminal, Copy, Check, ExternalLink } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 type Tab = "quickstart" | "api" | "sdk" | "embed" | "webhooks";
@@ -21,7 +20,7 @@ function CodeBlock({ code, language = "bash" }: { code: string; language?: strin
 
   return (
     <div className="relative group">
-      <pre className="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto text-sm">
+      <pre aria-label={`${language} code sample`} className="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto text-sm">
         <code>{code}</code>
       </pre>
       <button

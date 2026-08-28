@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, RotateCcw } from "lucide-react";
 import api from "@/lib/api";
@@ -55,7 +55,6 @@ function AnalysisSpinner() {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function AnalysisPage() {
-  const searchParams = useSearchParams();
   const router = useRouter();
   const { setProfile } = useBodyProfileStore();
   const startTime = useRef(Date.now());

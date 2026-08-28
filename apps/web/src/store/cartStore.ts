@@ -1,7 +1,17 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
+
+const browserStorage: StateStorage = {
+  getItem: (name) => (typeof localStorage === "undefined" ? null : localStorage.getItem(name)),
+  setItem: (name, value) => {
+    if (typeof localStorage !== "undefined") localStorage.setItem(name, value);
+  },
+  removeItem: (name) => {
+    if (typeof localStorage !== "undefined") localStorage.removeItem(name);
+  },
+};
 
 export interface LocalCartItem {
   productId: string;
@@ -74,6 +84,11 @@ export const useCartStore = create<CartState>()(
       getSubtotal: () => get().items.reduce((total, item) => total + item.unitPrice * item.quantity, 0),
       getItemCount: () => get().items.reduce((total, item) => total + item.quantity, 0),
     }),
-    { name: "prashna-cart", partialize: (state) => ({ items: state.items }), skipHydration: true },
+    {
+      name: "prashna-cart",
+      storage: createJSONStorage(() => browserStorage),
+      partialize: (state) => ({ items: state.items }),
+      skipHydration: true,
+    },
   ),
 );

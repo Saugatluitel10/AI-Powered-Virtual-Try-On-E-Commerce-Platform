@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import {
   Loader2,
-  TrendingUp,
   TrendingDown,
   BarChart3,
   Target,

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { Settings, Globe, Bell, Shield, Database } from "lucide-react";
+import { Globe, Bell, Shield, Database } from "lucide-react";
 
 export default function AdminSettingsPage() {
   const { user } = useAuth();

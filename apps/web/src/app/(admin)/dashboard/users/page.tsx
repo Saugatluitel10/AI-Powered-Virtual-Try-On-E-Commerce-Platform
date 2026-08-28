@@ -4,27 +4,7 @@ import { useState, useEffect } from "react";
 import { Users, Loader2, Shield, ShoppingBag, User as UserIcon } from "lucide-react";
 import api from "@/lib/api";
 
-interface PlatformUser {
-  id: string;
-  name: string | null;
-  email: string;
-  role: string;
-  avatar: string | null;
-  createdAt: string;
-  _count: {
-    orders: number;
-    tryOnResults: number;
-  };
-}
-
-const ROLE_STYLES: Record<string, string> = {
-  ADMIN: "bg-secondary-container text-secondary",
-  BRAND: "bg-surface-container-high text-primary",
-  CUSTOMER: "bg-surface-container text-on-surface-variant",
-};
-
 export default function AdminUsersPage() {
-  const [users, setUsers] = useState<PlatformUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
 

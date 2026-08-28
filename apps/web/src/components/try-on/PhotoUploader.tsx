@@ -7,10 +7,9 @@ import Image from "next/image";
 
 interface PhotoUploaderProps {
   onPhotoSelect: (file: File) => void;
-  selectedPhoto?: File | null;
 }
 
-export default function PhotoUploader({ onPhotoSelect, selectedPhoto }: PhotoUploaderProps) {
+export default function PhotoUploader({ onPhotoSelect }: PhotoUploaderProps) {
   const [preview, setPreview] = useState<string | null>(null);
 
   const onDrop = useCallback(

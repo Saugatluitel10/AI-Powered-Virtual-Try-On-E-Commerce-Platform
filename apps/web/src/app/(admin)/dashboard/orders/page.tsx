@@ -7,9 +7,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Truck,
-  CheckCircle,
-  XCircle,
-  Clock,
   RefreshCw,
 } from "lucide-react";
 import api from "@/lib/api";

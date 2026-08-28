@@ -11,8 +11,6 @@ import {
   Loader2,
   Shirt,
   ChevronDown,
-  ExternalLink,
-  Copy,
   Check,
   X,
   Sparkles,

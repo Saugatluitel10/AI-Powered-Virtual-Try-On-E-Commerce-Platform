@@ -84,12 +84,13 @@ Live camera access uses `navigator.mediaDevices.getUserMedia()`. It works on `lo
 - Email: `demo@prashna.clo`
 - Password: `Demo@123`
 
-New account signup also works. Accounts use salted SHA-256 password hashes and are stored only in the current browser for this local demonstration.
+New account signup also works. Accounts use salted PBKDF2-SHA-256 password hashes and are stored only in the current browser for this local demonstration. Existing local accounts created by an older version are upgraded after a successful login.
 
 ## Features
 
 - 30 realistic products with matching local images and NPR prices
 - Working category, gender, color, size, style, search, and price filters
+- Featured, price, and alphabetical product sorting
 - Product details, size selection, and persistent local cart
 - Local checkout, confirmation, and order history
 - Fonepay, eSewa, Khalti, card, and Cash on Delivery demonstrations
@@ -98,6 +99,8 @@ New account signup also works. Accounts use salted SHA-256 password hashes and a
 - Responsive desktop, tablet, and mobile layouts
 
 All online payment flows are simulations. No real transaction is processed, and card values are never stored or transmitted.
+
+The recommendation feature is described accurately as **AI-assisted clothing recommendation using image analysis and product matching**. Colour and tone are calculated from the selected image in the browser. Men, Women, and Unisex catalogue sections are always matched strictly. Automatic section suggestions use explicit image metadata when available and otherwise fall back to Unisex instead of guessing a person's gender from appearance; the user can override the section at any time.
 
 ## Commands
 
@@ -116,6 +119,8 @@ pnpm exec turbo build
 ```
 
 The optional API and older third-party integration code remain available for future development, but they are not started by `pnpm dev` and are not required for the local shopping application.
+
+The repository test suite includes 20 frontend tests for catalogue integrity, filters, sorting, image validation and analysis, recommendation matching, authentication, cart state, and orders, plus 125 backend tests for the optional API.
 
 ## Troubleshooting
 
